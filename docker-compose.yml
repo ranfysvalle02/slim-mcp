@@ -1,0 +1,61 @@
+services:
+  # MongoDB Atlas Local: a single-node deployment that speaks the same wire
+  # protocol as Atlas *and* ships the Vector Search engine. That matters
+  # here — the gateway's telemetry/audit and its route-by-meaning
+  # ($vectorSearch) all live on one engine, locally.
+  mongo:
+    image: mongodb/mongodb-atlas-local:latest
+    ports:
+      # Host port remapped to 27019 to avoid colliding with any other local
+      # Atlas Local instances. The gateway reaches Mongo over the compose network
+      # on 27017 (see MCPX_MONGO_URI), so this only affects host access.
+      - "27019:27017"
+    volumes:
+      - mongo_data:/data/db
+      # Atlas Local generates its replica-set keyfile here on first boot; it must
+      # persist (and stay separate from the data volume) or mongod won't start.
+      - mongo_config:/data/configdb
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 25s
+
+  mcp-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=development
+      - PYTHONPATH=/app
+      # directConnection skips replica-set discovery — correct for a single-node
+      # Atlas Local reached by service name.
+      - MCPX_MONGO_URI=mongodb://mongo:27017/?directConnection=true
+      - MCPX_MONGO_DATABASE=mcpx
+      # PAT for the upstream GitHub MCP server. Compose substitutes this from the
+      # host .env (GITHUB_PAT=...); the container reads it via the GITHUB_PAT env
+      # var since the .env file isn't baked into the image.
+      - GITHUB_PAT=${GITHUB_PAT:-}
+      - MCPX_GITHUB_READONLY=${MCPX_GITHUB_READONLY:-false}
+      # Reach the host's Ollama from inside the container so the live on-device
+      # demo and route-by-meaning (query embeddings) work under `docker compose up`.
+      - MCPX_OLLAMA_HOST=${MCPX_OLLAMA_HOST:-http://host.docker.internal:11434}
+    extra_hosts:
+      # Make host.docker.internal resolve on Linux too (it's automatic on Docker
+      # Desktop for macOS/Windows).
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./app:/app/app
+    command: uvicorn app.main:combined_app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo_data:
+  mongo_config:

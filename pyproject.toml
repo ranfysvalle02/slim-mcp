@@ -1,0 +1,13 @@
+[project]
+name = "mcpx-gateway"
+version = "0.1.0"
+description = "A token-disciplined, meaning-routed smart gateway for the Model Context Protocol: retrieve only the tools a task needs by meaning (MongoDB $vectorSearch), byte-for-byte and just fewer, with Mongo-backed telemetry and a live, on-device raw-vs-smart token comparison."
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]

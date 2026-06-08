@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Smart MCP Gateway · the discovery bill, paid two ways</title>
+<style>
+  :root {
+    --bg: #070a10;
+    --bg-2: #0b1019;
+    --panel: #10161f;
+    --panel-2: #161e2a;
+    --line: #232d3d;
+    --line-2: #2c384a;
+    --ink: #e9eff6;
+    --ink-dim: #9aa7b8;
+    --ink-faint-solid: #5e6b7d;
+    --raw: #ff6b6b;
+    --raw-dim: #4a2326;
+    --smart: #34d399;
+    --smart-dim: #133a2b;
+    --accent: #6aa9ff;
+    --gold: #f5c451;
+    --shadow: 0 1px 0 rgba(255,255,255,.02) inset, 0 12px 32px -16px rgba(0,0,0,.7);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(900px 480px at 50% -160px, #16263a 0%, rgba(11,16,25,0) 60%),
+      var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: .92em; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 22px 110px; }
+
+  /* ---------- hero ---------- */
+  header.hero { padding: 64px 0 8px; text-align: center; }
+  .kicker {
+    display: inline-block; font-family: var(--mono); font-size: 11.5px;
+    letter-spacing: .18em; text-transform: uppercase; color: var(--ink-dim);
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 15px; margin-bottom: 22px;
+    background: rgba(255,255,255,.01);
+  }
+  h1 { font-size: 44px; line-height: 1.08; margin: 0 0 14px; letter-spacing: -0.03em; font-weight: 800; }
+  h1 .grad { background: linear-gradient(96deg, var(--smart), var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: var(--ink); font-size: 18px; max-width: 700px; margin: 0 auto; font-weight: 500; }
+  .sub b { color: #fff; }
+  .thesis { color: var(--ink-dim); font-size: 15px; max-width: 700px; margin: 18px auto 0; line-height: 1.65; }
+  .thesis b { color: var(--ink); font-weight: 600; }
+  .thesis code { color: var(--smart); }
+
+  .route-banner {
+    display: inline-flex; align-items: center; gap: 12px; justify-content: center;
+    flex-wrap: wrap; margin: 30px auto 0; padding: 11px 18px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px; font-size: 13.5px;
+    box-shadow: var(--shadow);
+  }
+  .route-banner .node { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); }
+  .route-banner .arrow { color: var(--ink-faint-solid); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.gh { background: #fff; } .dot.mdb { background: var(--smart); box-shadow: 0 0 8px var(--smart); }
+  .route-banner small { color: var(--ink-faint-solid); }
+
+  /* ---------- sections ---------- */
+  section { margin-top: 52px; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 16px; }
+  .sec-num {
+    font-family: var(--mono); color: var(--smart); font-size: 12px; font-weight: 700;
+    border: 1px solid var(--smart-dim); border-radius: 7px; padding: 3px 8px; background: var(--smart-dim);
+  }
+  .sec-head h2 { font-size: 23px; margin: 0 0 2px; letter-spacing: -0.02em; }
+  .sec-head p { margin: 0; color: var(--ink-dim); font-size: 14px; }
+  .sec-head .txt { flex: 1; }
+
+  .panel {
+    background: linear-gradient(180deg, var(--panel) 0%, #0e141d 100%);
+    border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: var(--shadow);
+  }
+
+  /* ---------- task picker ---------- */
+  .tasks { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  .task-chip {
+    border: 1px solid var(--line); background: var(--bg-2); color: var(--ink-dim);
+    border-radius: 10px; padding: 9px 14px; cursor: pointer; font-size: 13.5px; transition: .14s; font-weight: 500;
+  }
+  .task-chip:hover { border-color: var(--line-2); color: var(--ink); transform: translateY(-1px); }
+  .task-chip.on { border-color: var(--smart); background: var(--smart-dim); color: #fff; }
+  .task-text { color: var(--ink-dim); font-size: 14px; margin-bottom: 20px; padding: 12px 14px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; }
+  .task-text code { color: var(--ink); }
+  .status-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+  .status-card { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .status-card .label { color: var(--ink-faint-solid); font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  .status-card .value { color: var(--ink); font-size: 14px; margin-top: 4px; }
+  .status-card.ok { border-color: #14392a; background: rgba(19,58,43,.55); }
+  .status-card.warn { border-color: #4a3c14; background: rgba(42,35,11,.65); }
+  .status-card.ok .value { color: var(--smart); }
+  .status-card.warn .value { color: var(--gold); }
+
+  /* ---------- discovery meter ---------- */
+  .meter { display: grid; gap: 14px; }
+  .bar-row { background: var(--bg-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; position: relative; overflow: hidden; }
+  .bar-row.raw { border-color: #3a2024; }
+  .bar-row.smart { border-color: #14392a; }
+  .bar-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .bar-name { font-weight: 700; font-size: 14.5px; display: flex; align-items: center; gap: 8px; }
+  .bar-row.raw .bar-name { color: var(--raw); } .bar-row.smart .bar-name { color: var(--smart); }
+  .bar-meta { font-size: 12px; color: var(--ink-dim); font-family: var(--mono); }
+  .big-num { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; font-family: var(--mono); line-height: 1; }
+  .big-num .unit { font-size: 12.5px; color: var(--ink-faint-solid); font-weight: 500; margin-left: 6px; font-family: var(--sans); }
+  .track { height: 9px; background: #060a10; border-radius: 999px; margin-top: 14px; overflow: hidden; border: 1px solid var(--line); }
+  .fill { height: 100%; border-radius: 999px; width: 0; transition: width .8s cubic-bezier(.2,.7,.2,1); }
+  .bar-row.raw .fill { background: linear-gradient(90deg, #7a2329, var(--raw)); }
+  .bar-row.smart .fill { background: linear-gradient(90deg, #12805e, var(--smart)); box-shadow: 0 0 16px -2px var(--smart); }
+  .meter.warming .bar-row.smart { border-color: #4a3c14; }
+  .meter.warming .bar-row.smart .bar-name { color: var(--gold); }
+  .meter.warming .bar-row.smart .fill { background: linear-gradient(90deg, #5d4514, var(--gold)); box-shadow: none; }
+  .meter-verdict { text-align: center; margin-top: 20px; font-size: 14.5px; color: var(--ink-dim); line-height: 1.6; }
+  .factor { font-size: 20px; font-weight: 800; color: var(--gold); font-family: var(--mono); }
+
+  /* ---------- controls ---------- */
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  select, .btn, input[type=text], textarea {
+    font-family: var(--sans); font-size: 14px; border-radius: 11px; border: 1px solid var(--line);
+    background: var(--bg-2); color: var(--ink); padding: 11px 15px; transition: .14s;
+  }
+  select:hover, input[type=text]:focus, textarea:focus { border-color: var(--line-2); outline: none; }
+  textarea { resize: vertical; width: 100%; min-height: 76px; line-height: 1.45; }
+  .task-input-wrap { margin: 10px 0 16px; }
+  .task-label { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; color: var(--ink-faint-solid); font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 7px; }
+  .task-label span:last-child { letter-spacing: 0; text-transform: none; color: var(--ink-dim); font-family: var(--sans); font-size: 12px; }
+  .session-divider { height: 1px; background: var(--line); margin: 22px 0; }
+  .btn { cursor: pointer; font-weight: 700; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: linear-gradient(96deg, var(--smart), #15a87a); color: #042016; border: 0; padding: 12px 24px; font-size: 15px; box-shadow: 0 10px 24px -12px var(--smart); }
+  .btn.primary:hover { filter: brightness(1.06); }
+  .btn.primary:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+  .btn.ghost { background: transparent; color: var(--ink-dim); }
+  .btn.ghost:hover { color: var(--ink); }
+  label.muted { color: var(--ink-faint-solid); font-size: 13px; display: inline-flex; align-items: center; gap: 8px; }
+  .muted { color: var(--ink-faint-solid); font-size: 13px; }
+  .pill { font-family: var(--mono); font-size: 11.5px; padding: 3px 9px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); color: var(--ink-dim); }
+  .pill.ok { color: var(--smart); border-color: var(--smart-dim); background: var(--smart-dim); }
+  .pill.warn { color: var(--gold); border-color: #4a3c14; background: #2a230b; }
+
+  /* ---------- run console ---------- */
+  .console { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 22px; }
+  .lane { background: var(--bg-2); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; min-height: 230px; }
+  .lane.raw { border-top: 2px solid var(--raw); }
+  .lane.smart { border-top: 2px solid var(--smart); }
+  .lane h3 { margin: 0 0 2px; font-size: 14.5px; letter-spacing: .02em; }
+  .lane .server { font-size: 11.5px; color: var(--ink-faint-solid); font-family: var(--mono); margin-bottom: 14px; }
+  .stat-row { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; }
+  .stat { font-size: 11.5px; color: var(--ink-faint-solid); }
+  .stat b { display: block; font-size: 20px; color: var(--ink); font-family: var(--mono); font-weight: 700; letter-spacing: -.01em; }
+  .lane.raw .stat.prefill b { color: var(--raw); } .lane.smart .stat.prefill b { color: var(--smart); }
+  .stream {
+    flex: 1; font-family: var(--mono); font-size: 12.5px; color: var(--ink-dim); white-space: pre-wrap;
+    background: #060a10; border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-height: 92px; overflow: auto; max-height: 220px;
+  }
+  .cursor { display: inline-block; width: 7px; height: 14px; background: var(--smart); animation: blink 1s steps(2) infinite; vertical-align: -2px; }
+  @keyframes blink { 0%,50% {opacity:1;} 50.01%,100%{opacity:0;} }
+  .pick { margin-top: 12px; font-size: 13px; }
+  .pick .ok { color: var(--smart); font-weight: 700; }
+  .pick .bad { color: var(--raw); font-weight: 700; }
+  .pick code { color: var(--ink); }
+  .phase-note { color: var(--ink-faint-solid); font-size: 13px; margin-top: 16px; font-style: italic; min-height: 18px; }
+
+  .summary { margin-top: 22px; text-align: center; display: none; padding: 22px; background: var(--smart-dim); border: 1px solid #14392a; border-radius: 14px; }
+  .summary.show { display: block; }
+  .summary .head { font-size: 15px; color: var(--ink-dim); }
+  .summary .factor-xl { font-size: 50px; font-weight: 900; color: var(--gold); font-family: var(--mono); letter-spacing: -0.04em; line-height: 1.1; }
+  .summary .proj { color: var(--ink-faint-solid); font-size: 13px; margin-top: 8px; }
+
+  /* ---------- modal ---------- */
+  .modal-back { position: fixed; inset: 0; background: rgba(3,6,11,.78); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 50; }
+  .modal-back.show { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--line-2); border-radius: 18px; max-width: 900px; width: 100%; max-height: 88vh; overflow: auto; padding: 28px; box-shadow: 0 32px 80px -24px rgba(0,0,0,.9); }
+  .modal h3 { margin: 0 0 6px; font-size: 20px; }
+  .modal .x { float: right; cursor: pointer; color: var(--ink-faint-solid); font-size: 24px; border: 0; background: none; line-height: 1; }
+  .modal .x:hover { color: var(--ink); }
+  .code-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
+  pre { background: #060a10; border: 1px solid var(--line); border-radius: 12px; padding: 15px; overflow: auto; font-family: var(--mono); font-size: 12.5px; color: #cdd9e5; margin: 0; line-height: 1.6; }
+  pre .c { color: var(--ink-faint-solid); } pre .k { color: #c792ea; } pre .s { color: var(--smart); } pre .r { color: var(--raw); }
+
+  footer { text-align: center; color: var(--ink-faint-solid); font-size: 13px; margin-top: 64px; line-height: 1.7; }
+  .err { color: var(--raw); font-size: 13px; margin-top: 12px; }
+  @media (max-width: 720px) {
+    .console, .code-grid, .status-strip { grid-template-columns: 1fr; }
+    h1 { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <span class="kicker">It was never the protocol</span>
+    <h1>Same MCP, same model, same task.<br/><span class="grad">A fraction of the bill.</span></h1>
+    <p class="sub">MCP just hands a model its tools. Whether that handoff costs twenty thousand tokens or a few hundred is decided <b>above the wire</b> — never by the protocol.</p>
+    <p class="thesis">A kitchen-sink server ships the whole binder every turn. A <b>smart MCP gateway with MongoDB</b> embeds the binder once, then — when you just <b>say what you're doing</b> — retrieves only the tools that task needs by <b>meaning</b> (MongoDB <code>$vectorSearch</code>). The tools it hands back are <b>byte-for-byte identical</b> to the firehose — the <i>only</i> thing that changes is how <b>many</b>. Nothing to declare, no key, no cloud: the model runs on your own hardware.</p>
+    <div class="route-banner">
+      <span class="node"><span class="dot gh"></span> Tools via <b>GitHub's official MCP server</b></span>
+      <span class="arrow">→</span>
+      <span class="node"><span class="dot mdb"></span> Working on <b><a id="repoLink" href="#" target="_blank">mongodb-js/mongodb-mcp-server</a></b></span>
+      <small id="repoNote">· MongoDB's own open-source MCP server</small>
+    </div>
+  </header>
+
+  <!-- 1. Live session -->
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><div class="txt"><h2>Run one live session</h2><p>Pick or edit a task, then press run. The click fetches both MCP catalogs, routes with <code>$vectorSearch</code>, shows the discovery bill, and runs the local model A/B.</p></div></div>
+    <div class="panel">
+      <div class="tasks" id="tasks"></div>
+      <div class="task-input-wrap">
+        <label class="task-label" for="taskInput"><span>Task / x-mcp-query</span><span>Nothing runs until you press Run</span></label>
+        <textarea id="taskInput" spellcheck="false"></textarea>
+      </div>
+      <div class="controls">
+        <button class="btn primary" id="runBtn">▶ Run live comparison</button>
+        <label class="muted">model
+          <select id="modelSel"></select>
+        </label>
+        <span id="localStatus"></span>
+        <span style="flex:1"></span>
+        <button class="btn ghost" id="codeBtn">‹ / › Agent code</button>
+      </div>
+      <div id="runErr" class="err" style="display:none"></div>
+
+      <div class="session-divider"></div>
+      <div class="status-strip">
+        <div class="status-card" id="rawStatus"><div class="label">Raw source</div><div class="value">official GitHub MCP</div></div>
+        <div class="status-card" id="routeStatus"><div class="label">Vector route</div><div class="value">not run yet</div></div>
+        <div class="status-card" id="smartStatus"><div class="label">Gateway behavior</div><div class="value">waiting for click</div></div>
+      </div>
+      <div class="meter" id="meter">
+        <div class="bar-row raw">
+          <div class="bar-top">
+            <span class="bar-name">Official GitHub MCP</span>
+            <span class="bar-meta" id="rawMeta">—</span>
+          </div>
+          <div class="big-num"><span id="rawTokens">—</span><span class="unit">tokens / turn</span></div>
+          <div class="track"><div class="fill" id="rawFill"></div></div>
+        </div>
+        <div class="bar-row smart">
+          <div class="bar-top">
+            <span class="bar-name">Smart MCP Gateway · MongoDB</span>
+            <span class="bar-meta" id="smartMeta">—</span>
+          </div>
+          <div class="big-num"><span id="smartTokens">—</span><span class="unit">tokens / turn</span></div>
+          <div class="track"><div class="fill" id="smartFill"></div></div>
+        </div>
+      </div>
+      <div class="meter-verdict" id="meterVerdict"></div>
+
+      <div class="session-divider"></div>
+      <div class="console">
+        <div class="lane raw" id="laneRaw">
+          <h3 style="color:var(--raw)">RAW · full catalog</h3>
+          <div class="server">api.githubcopilot.com · every tool, full descriptions</div>
+          <div class="stat-row">
+            <div class="stat prefill"><b id="rawInj">—</b>injected tool tokens</div>
+            <div class="stat"><b id="rawPrompt">—</b>prompt tokens (model)</div>
+            <div class="stat"><b id="rawLat">—</b>compute ms</div>
+          </div>
+          <div class="stream" id="rawStream"><span class="muted">idle — press Run</span></div>
+          <div class="pick" id="rawPick"></div>
+        </div>
+        <div class="lane smart" id="laneSmart">
+          <h3 style="color:var(--smart)">SMART · retrieved by meaning</h3>
+          <div class="server">smart MCP gateway · MongoDB $vectorSearch top-k · same tools, full descriptions</div>
+          <div class="stat-row">
+            <div class="stat prefill"><b id="smartInj">—</b>injected tool tokens</div>
+            <div class="stat"><b id="smartPrompt">—</b>prompt tokens (model)</div>
+            <div class="stat"><b id="smartLat">—</b>compute ms</div>
+          </div>
+          <div class="stream" id="smartStream"><span class="muted">idle — press Run</span></div>
+          <div class="pick" id="smartPick"></div>
+        </div>
+      </div>
+      <div class="phase-note" id="phaseNote"></div>
+
+      <div class="summary" id="summary">
+        <div class="head">The local model paid <span id="sumRaw"></span> tokens to read the binder, <span id="sumSmart"></span> to read only the tools the gateway retrieved.</div>
+        <div class="factor-xl" id="sumFactor"></div>
+        <div class="proj" id="sumProj"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    One FastAPI process · FastMCP proxy to the real GitHub MCP server · MongoDB Atlas Local for route-by-meaning + telemetry · Ollama on-device. <br/>
+    Numbers measured with the same tiktoken logic the gateway runs.
+  </footer>
+</div>
+
+<!-- code modal -->
+<div class="modal-back" id="codeModal">
+  <div class="modal">
+    <button class="x" data-close>×</button>
+    <h3>Two clients. One difference: which server you point at.</h3>
+    <p class="muted">Same library, same model, same task. The raw client talks to the official GitHub MCP server and gets the whole binder; the smart client talks to the <b>smart MCP gateway (MongoDB-backed)</b> and just <b>says what it's doing</b> via an <code>x-mcp-query</code> header. Nothing to declare up front.</p>
+    <div class="code-grid">
+      <div>
+        <div class="pill" style="color:var(--raw);border-color:var(--raw-dim)">RAW</div>
+        <pre><span class="c"># Official GitHub MCP — the whole binder</span>
+<span class="k">from</span> fastmcp <span class="k">import</span> Client
+
+client = Client(
+  <span class="s">"https://api.githubcopilot.com/mcp/x/all"</span>,
+  headers={<span class="s">"Authorization"</span>: <span class="s">"Bearer $GITHUB_PAT"</span>},
+)
+<span class="k">async with</span> client:
+  tools = <span class="k">await</span> client.list_tools()
+  <span class="c"># -> the whole catalog, full schemas</span>
+</pre>
+      </div>
+      <div>
+        <div class="pill ok">SMART</div>
+        <pre><span class="c"># Smart MCP gateway (MongoDB) — only what the task needs</span>
+<span class="k">from</span> fastmcp <span class="k">import</span> Client
+
+client = Client(
+  <span class="s">"http://localhost:8000/mcp/"</span>,
+  headers={<span class="s">"x-mcp-query"</span>: <span class="s">"review this pull request"</span>},
+)
+<span class="k">async with</span> client:
+  tools = <span class="k">await</span> client.list_tools()
+  <span class="c"># -> only the tools this task needs — same full schemas, far fewer tokens</span>
+</pre>
+      </div>
+    </div>
+    <p class="muted" style="margin-top:16px">The gateway embeds the whole catalog once. The <code>x-mcp-query</code> is embedded and matched against it with a single MongoDB <code>$vectorSearch</code>, and only the top-k tools — ranked by meaning — come back. With no query header it behaves like an honest proxy and returns the full catalog.</p>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString());
+let CONFIG = null, CURRENT = null, RUNNING = false;
+
+async function api(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`${path} → ${r.status}`);
+  return r.json();
+}
+
+/* ---------- task picker + discovery meter ---------- */
+function renderTasks() {
+  const host = $("tasks"); host.innerHTML = "";
+  CONFIG.tasks.forEach((t, i) => {
+    const c = document.createElement("button");
+    c.className = "task-chip" + (i === 0 ? " on" : "");
+    c.textContent = t.label;
+    c.onclick = () => selectTask(i);
+    host.appendChild(c);
+  });
+}
+function selectTask(i) {
+  [...$("tasks").children].forEach((c, j) => c.classList.toggle("on", i === j));
+  CURRENT = CONFIG.tasks[i];
+  $("taskInput").value = CURRENT.task;
+  resetDiscovery();
+  resetConsole();
+}
+
+function resetDiscovery() {
+  $("meter").classList.remove("warming");
+  $("rawTokens").textContent = "—";
+  $("smartTokens").textContent = "—";
+  $("rawMeta").textContent = "not fetched";
+  $("smartMeta").textContent = "not fetched";
+  $("rawFill").style.width = "0";
+  $("smartFill").style.width = "0";
+  $("routeStatus").className = "status-card";
+  $("routeStatus").querySelector(".value").textContent = "not run yet";
+  $("smartStatus").className = "status-card";
+  $("smartStatus").querySelector(".value").textContent = "waiting for click";
+  $("meterVerdict").innerHTML = '<span class="muted">Press Run to fetch the live catalogs and compute the bill.</span>';
+}
+
+function expectedToolFor(task) {
+  const match = (CONFIG.tasks || []).find(t => t.task === task);
+  return match ? match.expected_tool : null;
+}
+
+function renderDiscoveryFromBuilt(ev) {
+  const raw = ev.raw.list_tokens, smart = ev.smart.list_tokens;
+  $("meter").classList.toggle("warming", !ev.routed);
+  $("rawTokens").textContent = fmt(raw);
+  $("smartTokens").textContent = fmt(smart);
+  $("rawMeta").textContent = `${ev.raw.tool_count} tools · full descriptions`;
+  $("smartMeta").textContent = ev.routed
+    ? `${ev.smart.tool_count} tools · top-${ev.route_top_k} by meaning`
+    : `${ev.smart.tool_count} tools · fail-open full catalog`;
+  $("rawFill").style.width = "100%";
+  $("smartFill").style.width = Math.max(2, (smart / raw) * 100) + "%";
+  $("routeStatus").className = "status-card " + (ev.routed ? "ok" : "warn");
+  $("routeStatus").querySelector(".value").textContent = ev.routed
+    ? `$vectorSearch returned top-${ev.smart.tool_count}`
+    : "index/embeddings warming up";
+  $("smartStatus").className = "status-card " + (ev.routed ? "ok" : "warn");
+  $("smartStatus").querySelector(".value").textContent = ev.routed
+    ? "semantic shortlist"
+    : "safe fail-open catalog";
+  if (ev.routed) {
+    const f = smart ? (raw / smart).toFixed(2) : null;
+    $("meterVerdict").innerHTML = `The official server ships <b>${fmt(raw)}</b> tokens of tools every turn. The gateway sent <b>${ev.smart.tool_count}</b> of <b>${ev.raw.tool_count}</b> — the same tools, just the ones this task needs — for <b>${fmt(smart)}</b>. That's <span class="factor">${f}×</span> lighter.`;
+  } else {
+    $("meterVerdict").innerHTML = `Vector retrieval is not ready yet, so the gateway returned its honest fail-open state: the full safety-floored catalog (<b>${ev.smart.tool_count}</b> tools, <b>${fmt(smart)}</b> tokens). This is <b>not</b> the semantic-retrieval win; the model run stops here instead of demoing the wrong thing.`;
+  }
+}
+
+/* ---------- run console ---------- */
+function resetConsole() {
+  ["rawInj","rawPrompt","rawLat","smartInj","smartPrompt","smartLat"].forEach(id => $(id).textContent = "—");
+  $("rawStream").innerHTML = '<span class="muted">idle — press Run</span>';
+  $("smartStream").innerHTML = '<span class="muted">idle — press Run</span>';
+  $("rawPick").innerHTML = ""; $("smartPick").innerHTML = "";
+  $("summary").classList.remove("show");
+  $("phaseNote").textContent = "";
+  $("runErr").style.display = "none";
+}
+
+async function streamPost(path, body, onEvent) {
+  const resp = await fetch(path, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  if (!resp.ok || !resp.body) throw new Error(`stream ${resp.status}`);
+  const reader = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const frame = buf.slice(0, idx); buf = buf.slice(idx + 2);
+      const line = frame.split("\n").find(l => l.startsWith("data:"));
+      if (!line) continue;
+      try { onEvent(JSON.parse(line.slice(5).trim())); } catch (_) {}
+    }
+  }
+}
+
+const streamBuf = { raw: "", smart: "" };
+function onRunEvent(ev) {
+  if (ev.type === "phase") { $("phaseNote").textContent = ev.msg; }
+  else if (ev.type === "built") {
+    renderDiscoveryFromBuilt(ev);
+    $("phaseNote").textContent = ev.routed
+      ? `Catalogs fetched over MCP — raw: ${ev.raw.tool_count} tools, smart: ${ev.smart.tool_count} tools. The model is reading both now…`
+      : `Catalogs fetched, but vector retrieval is not ready; stopping before model inference.`;
+  }
+  else if (ev.type === "infer") {
+    const s = ev.stage;
+    $(s + "Inj").textContent = fmt(ev.injected_tokens);
+    streamBuf[s] = "";
+    $(s + "Stream").innerHTML = `<span class="muted">reading ${fmt(ev.injected_tokens)} tokens of catalog (prefill)…</span><span class="cursor"></span>`;
+  }
+  else if (ev.type === "token") {
+    const s = ev.stage;
+    streamBuf[s] += ev.text;
+    const el = $(s + "Stream");
+    el.innerHTML = escapeHtml(streamBuf[s]) + '<span class="cursor"></span>';
+    el.scrollTop = el.scrollHeight;
+  }
+  else if (ev.type === "result") {
+    const s = ev.stage, r = ev.result;
+    $(s + "Prompt").textContent = fmt(r.prompt_tokens);
+    $(s + "Lat").textContent = fmt(Math.round(r.latency_ms || 0));
+    $(s + "Stream").innerHTML = escapeHtml(streamBuf[s] || r.answer || "");
+  }
+  else if (ev.type === "summary") { renderSummary(ev.summary); }
+  else if (ev.type === "error") { $("runErr").style.display = "block"; $("runErr").textContent = ev.detail; finishRun(); }
+}
+
+function renderPick(stage, res, expected) {
+  const el = $(stage + "Pick");
+  if (!res || res.picked_tool == null) { el.innerHTML = `<span class="bad">no tool picked</span>`; return; }
+  const ok = expected ? res.picked_tool === expected : null;
+  const mark = ok === true ? `<span class="ok">✓</span>` : ok === false ? `<span class="bad">✗</span>` : "";
+  el.innerHTML = `${mark} picked <code>${res.picked_tool}</code>${expected && ok === false ? ` <span class="muted">(expected ${expected})</span>` : ""}`;
+}
+
+function renderSummary(s) {
+  renderPick("raw", s.raw, s.expected_tool);
+  renderPick("smart", s.smart, s.expected_tool);
+  const r = s.raw.prompt_tokens, sm = s.smart.prompt_tokens;
+  $("sumRaw").textContent = fmt(r); $("sumSmart").textContent = fmt(sm);
+  const f = s.savings.prompt_factor;
+  $("sumFactor").textContent = f ? `${f}× fewer prompt tokens` : "—";
+  if (r && sm) {
+    // Illustrative hosted projection: $3 / 1M input tokens, 1,000 turns.
+    const cost = (t) => (t * 1000 / 1e6 * 3).toFixed(2);
+    $("sumProj").textContent = `Over 1,000 turns at $3 / 1M input tokens: $${cost(r)} → $${cost(sm)}. Fewer tools also means fewer wrong picks.`;
+  }
+  $("summary").classList.add("show");
+  finishRun();
+}
+
+function finishRun() { RUNNING = false; $("runBtn").disabled = false; $("runBtn").textContent = "▶ Run live comparison"; }
+
+$("runBtn").addEventListener("click", async () => {
+  if (RUNNING) return;
+  if (!CONFIG.local_ready) { $("runErr").style.display = "block"; $("runErr").textContent = "No local Ollama runtime detected. Start it with `ollama serve` and pull a model."; return; }
+  const task = $("taskInput").value.trim();
+  if (!task) { $("runErr").style.display = "block"; $("runErr").textContent = "Enter a task first."; return; }
+  RUNNING = true; $("runBtn").disabled = true; $("runBtn").textContent = "fetching catalogs…";
+  resetConsole();
+  resetDiscovery();
+  $("routeStatus").querySelector(".value").textContent = "fetching catalogs…";
+  $("smartStatus").querySelector(".value").textContent = "waiting on gateway…";
+  $("rawStream").innerHTML = '<span class="muted">waiting…</span>';
+  $("smartStream").innerHTML = '<span class="muted">waiting…</span>';
+  try {
+    await streamPost("/demo/try/stream", {
+      task, expected_tool: expectedToolFor(task),
+      model: $("modelSel").value || null,
+    }, onRunEvent);
+  } catch (e) {
+    $("runErr").style.display = "block"; $("runErr").textContent = e.message;
+  } finally { finishRun(); }
+});
+
+function escapeHtml(s) { return (s || "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+
+/* ---------- modals ---------- */
+function openModal(id) { $(id).classList.add("show"); }
+document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest(".modal-back").classList.remove("show"));
+document.querySelectorAll(".modal-back").forEach(m => m.onclick = (e) => { if (e.target === m) m.classList.remove("show"); });
+$("codeBtn").onclick = () => openModal("codeModal");
+
+/* ---------- boot ---------- */
+async function boot() {
+  try {
+    CONFIG = await api("/demo/try/config");
+  } catch (e) {
+    CONFIG = { tasks: [], local_ready: false, local_models: [], repo: "mongodb-js/mongodb-mcp-server" };
+  }
+  if (CONFIG.repo_url) { $("repoLink").href = CONFIG.repo_url; $("repoLink").textContent = CONFIG.repo; }
+  if (CONFIG.repo_note) $("repoNote").textContent = "· " + CONFIG.repo_note;
+
+  const sel = $("modelSel"); sel.innerHTML = "";
+  (CONFIG.local_models || []).forEach(m => { const o = document.createElement("option"); o.value = m; o.textContent = m; if (m === CONFIG.default_model) o.selected = true; sel.appendChild(o); });
+  if (!CONFIG.local_models || !CONFIG.local_models.length) { const o = document.createElement("option"); o.textContent = CONFIG.default_model || "qwen3:14b"; sel.appendChild(o); }
+  const ls = $("localStatus");
+  ls.className = "pill " + (CONFIG.local_ready ? "ok" : "warn");
+  ls.textContent = CONFIG.local_ready ? "● Ollama on-device" : "○ start Ollama to run";
+
+  if (CONFIG.tasks && CONFIG.tasks.length) { renderTasks(); selectTask(0); }
+}
+boot();
+</script>
+</body>
+</html>
