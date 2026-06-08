@@ -203,7 +203,10 @@ async def explain_route(
     k: int = 8,
     cfg: Settings = settings,
 ) -> dict[str, Any]:
-    """Return the ranked ``$vectorSearch`` hits (with scores) for the UI inspector."""
+    """Return the ranked ``$vectorSearch`` hits (with scores).
+
+    Used by ``scripts/seed_catalog.py`` to prove retrieval offline after seeding.
+    """
 
     db = get_database()
     out: dict[str, Any] = {"hits": [], "selected": [], "embedder_available": False}
@@ -222,7 +225,7 @@ async def explain_route(
 
 
 async def route_status(cfg: Settings = settings) -> dict[str, Any]:
-    """Readiness for the dashboard's route-by-meaning panel."""
+    """Readiness check for route-by-meaning (used by ``scripts/seed_catalog.py``)."""
 
     db = get_database()
     if db is None:

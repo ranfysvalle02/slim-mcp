@@ -16,7 +16,7 @@ from app.settings import settings
 def _current_headers() -> dict[str, str]:
     try:
         return get_http_headers()
-    except Exception:  # noqa: BLE001 -- no request context (e.g. preview path)
+    except Exception:  # noqa: BLE001 -- no request context (e.g. background seeding)
         return {}
 
 

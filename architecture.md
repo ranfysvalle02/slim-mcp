@@ -39,7 +39,6 @@ flowchart TB
   pipeline -->|"proxied tools/list + tools/call"| gh["Official GitHub MCP server<br/>(~93 tools)"]
 
   mw -. "embed query / telemetry / audit / route-by-meaning" .-> mongo[("MongoDB<br/>Atlas Local")]
-  rest -. "preview + playground" .-> mongo
 ```
 
 Two planes:
