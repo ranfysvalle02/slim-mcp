@@ -79,7 +79,8 @@ words and the gateway finds the tools:
   `list_releases` — again, no literal overlap; the vector space does the work.
 
 The token savings and the *right tools, ranked* both come from this one hop. It's
-shown live in the dashboard's **"Route by meaning"** inspector and detailed under
+exercised live in the dashboard's **"Run one live session"** A/B (and on the MCP
+hot path via the `X-MCP-Query` header), and detailed under
 [Route by meaning](#route-by-meaning-mongodb-vector-search) below.
 
 ### One idea, on purpose
@@ -114,7 +115,27 @@ name (a blocked call is indistinguishable from a nonexistent tool). This is the
 only static rule in the gateway, and it's a guardrail, not an authorization model:
 it just guarantees a high-scoring semantic match for *"clean up the repo"* can't
 hand the model `delete_repository`. Toggle with `MCPX_BLOCK_DESTRUCTIVE` (default
-on).
+on). You can see exactly what it hides on the dashboard's **Safety floor** panel
+(or `GET /demo/safety`).
+
+#### Customize the blocklist
+
+A tool is judged destructive in [`app/gateway/github_proxy.py`](./app/gateway/github_proxy.py)
+by `is_destructive()`: it returns true if the upstream annotates the tool
+`destructiveHint`, **or** the tool's name contains one of a short list of
+substrings — the blocklist. There are three levers:
+
+- **Edit the needles** — change the `DESTRUCTIVE_NEEDLES` tuple (defaults to
+  `("delete", "admin")`). Each entry is a lowercase substring matched against the
+  tool name, so adding `"remove"` or `"force"` immediately widens what's hidden.
+- **Toggle the floor** — `MCPX_BLOCK_DESTRUCTIVE=false` disables it entirely
+  (default on). The catalog still loads; nothing is hidden.
+- **Filter at the source** — `MCPX_GITHUB_READONLY=true` asks the upstream GitHub
+  MCP server for a read-only catalog, so write/destructive tools never reach the
+  gateway in the first place.
+
+Because the retrieval catalog is built from the *floored* tool list, anything the
+blocklist drops is never embedded — so it can't be retrieved *or* invoked.
 
 ### Upstream: the real GitHub MCP server (proxied)
 
@@ -132,9 +153,7 @@ mock.
 | Endpoint                | What it returns                                              |
 | ----------------------- | ----------------------------------------------------------- |
 | `GET /` · `GET /demo`   | The live token-savings dashboard (HTML).                    |
-| `GET /demo/preview`     | Live raw-firehose vs smart-retrieval `tools/list` token comparison. With `?q=<task>` the smart side is the semantic top-k; without it, the full catalog. Descriptions are byte-for-byte identical on both sides — only the tool count changes. |
-| `GET /demo/route`       | Explain how a free-form `?q=<task>` routes to tools — the ranked `$vectorSearch` hits with scores, and the top-k selection the gateway hands the model. |
-| `GET /demo/route/config`| Readiness + curated colloquial queries for route debugging / manual inspection. |
+| `GET /demo/safety`      | Read-only view of the safety floor: how many destructive tools the blocklist hides, which ones, the active needles, and whether the floor is enabled. Powers the dashboard's **Safety floor** panel. |
 | `GET /demo/try/config`  | Config for the live "try it yourself" panel (local-runtime readiness + detected Ollama models, demo tasks). |
 | `POST /demo/try`        | Runs a task through a **local** model twice (raw vs smart) and returns the model's own token usage, per-pass latency, and tool pick. Fully on-device via Ollama — no key, nothing leaves the machine. The smart pass hands the gateway the task as `x-mcp-query`. |
 | `POST /demo/try/stream` | Same run as `POST /demo/try`, but streamed as Server-Sent Events (`infer` → `token` → `result` → `summary`) so the dashboard can show prefill, live token output, and per-pass timing. |
@@ -170,8 +189,8 @@ the thesis — *MCP isn't the problem, how you use it is* — top to bottom:
   reports the **model's own** prompt-token counts, which tool each picked (✓/✗),
   and a hosted-cost projection.
 - A **single, focused control surface**: the page keeps only what proves the demo's
-  claim (live bill + live model A/B) and moves deeper route-debugging detail to the
-  API (`/demo/route`) instead of the main UX.
+  claim (live bill + live model A/B) plus the **Safety floor** panel, and leaves
+  deeper route-debugging to `scripts/seed_catalog.py` instead of crowding the UX.
 
 The dashboard's numbers use the exact same tiktoken logic (`app/tokens.py`) as the
 live gateway, so what you see is what an MCP client actually pays.
@@ -227,10 +246,11 @@ runs are failing"* shares no keywords with GitHub's terse tool names, yet lands 
 lexical arm? MongoDB does keyword `$search` on the same documents; the demo stays
 deliberately to one clean mechanism — see the blog appendix.)
 
-It's live in two places: the dashboard's **"Route by meaning"** inspector, and the
-MCP hot path via the `X-MCP-Query` header. Everything fails open: no Mongo, no
-indexes, or no local embedder and the gateway serves the full catalog — never
-worse than a plain firehose proxy.
+It's live on the MCP hot path via the `X-MCP-Query` header (and surfaced in the
+dashboard's live A/B); `scripts/seed_catalog.py` prints the ranked `$vectorSearch`
+hits for a handful of colloquial queries as an offline proof. Everything fails
+open: no Mongo, no indexes, or no local embedder and the gateway serves the full
+catalog — never worse than a plain firehose proxy.
 
 ## Configuration
 
@@ -277,7 +297,7 @@ app/
     headers.py       # the one request-header helper (x-mcp-query)
     transforms.py    # SafetyFloorTransform (the only static rule)
     middleware.py    # SemanticFilterMiddleware (x-mcp-query -> vector top-k)
-    preview.py       # read-only /demo/preview math (firehose vs semantic top-k)
+    preview.py       # read-only catalog loaders + /demo/safety floor introspection
     playground.py    # live on-device A/B driver (raw vs smart, streamed)
   persistence/       # optional Mongo (PyMongo async): client, telemetry,
     catalog.py       #   route-by-meaning ($vectorSearch) — the core

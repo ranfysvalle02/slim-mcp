@@ -23,31 +23,19 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastmcp import FastMCP
 from pydantic import BaseModel
 
 from app.gateway.github_proxy import build_github_proxy
 from app.gateway.middleware import SemanticFilterMiddleware
-from app.gateway.preview import build_preview
+from app.gateway.preview import safety_floor_status
 from app.gateway.transforms import SafetyFloorTransform
 from app.persistence import shutdown_mongo, startup_mongo
 from app.settings import settings
 
 STATIC_DIR = Path(__file__).parent / "static"
-
-# Colloquial demo queries for the "route by meaning" inspector. Each is worded so
-# it shares *no* keywords with GitHub's terse tool descriptions -- the match has
-# to come from meaning, via the embedding, not from a literal keyword overlap.
-ROUTE_EXAMPLES: list[dict[str, str]] = [
-    {"label": "\u201cthe build's been red all morning\u201d", "query": "the build's been red all morning"},
-    {"label": "\u201ccan someone look at my change?\u201d", "query": "can someone look at my change before it ships?"},
-    {"label": "\u201cwhat did we ship last week?\u201d", "query": "what did we ship to users last week?"},
-    {"label": "\u201ctrack down that crash report\u201d", "query": "track down the crash report a user filed"},
-    {"label": "\u201cwho can push to this repo?\u201d", "query": "who has permission to push to this repository?"},
-    {"label": "\u201cstamp a new version for users\u201d", "query": "stamp a new version and ship it to users"},
-]
 
 
 class TryRequest(BaseModel):
@@ -116,55 +104,17 @@ def build_app() -> FastAPI:
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )
 
-    @api.get("/demo/preview")
-    async def demo_preview(q: str | None = Query(default=None)) -> dict:
-        """Live raw-firehose vs smart-retrieval ``tools/list`` token comparison.
+    @api.get("/demo/safety")
+    async def demo_safety() -> dict:
+        """Read-only view of the safety floor: what the blocklist hides, and how.
 
-        With ``q`` the smart side is the semantic top-k for that task; without it
-        the smart side is the full catalog. Descriptions are byte-for-byte
-        identical on both sides -- only the tool count differs.
+        Diffs the literal upstream catalog against the safety-floored one so the
+        dashboard can show exactly which destructive tools are dropped. Strictly
+        read-only -- it reuses cached catalogs and never changes what the floor
+        blocks.
         """
 
-        return await build_preview(q)
-
-    @api.get("/demo/route/config")
-    async def demo_route_config() -> dict:
-        """Readiness + curated colloquial queries for the 'route by meaning' inspector."""
-
-        from app.persistence.catalog import route_status
-
-        status = await route_status()
-        return {
-            "enabled": bool(status.get("enabled")),
-            "reason": status.get("reason"),
-            "catalog_size": status.get("catalog_size"),
-            "embed_model": settings.embed_model,
-            "embed_dimensions": settings.embed_dimensions,
-            "top_k": settings.route_top_k,
-            "examples": ROUTE_EXAMPLES,
-        }
-
-    @api.get("/demo/route")
-    async def demo_route(
-        q: str = Query(..., min_length=1),
-        k: int | None = Query(default=None),
-    ) -> dict:
-        """Explain how a free-form query routes to tools via MongoDB $vectorSearch."""
-
-        from app.persistence.catalog import explain_route, route_status
-
-        status = await route_status()
-        resp: dict = {
-            "enabled": bool(status.get("enabled")),
-            "reason": status.get("reason"),
-            "catalog_size": status.get("catalog_size"),
-            "query": q,
-        }
-        if not status.get("enabled"):
-            return resp
-        detail = await explain_route(q, k=k or settings.route_top_k)
-        resp.update(detail)
-        return resp
+        return await safety_floor_status()
 
     @api.get("/demo/try/config")
     async def demo_try_config() -> dict:

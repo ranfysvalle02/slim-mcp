@@ -60,5 +60,26 @@ MongoDB does the vector math and returns just the ~8 relevant tools. The gateway
 ### 4. Execution
 When the AI decides to actually *run* one of those tools, the gateway doesn't execute it locally. It forwards that exact command straight back to the official GitHub MCP server. GitHub performs the action as *you* (using your PAT), and the gateway passes the real result back to the AI.
 
+## The Safety Floor (the bouncer's blocklist)
+
+There's one thing the bouncer does *without* being asked, and it's the only hand-written rule in the whole gateway: it refuses to let **destructive** tools through the door — in **both** directions.
+
+GitHub's catalog includes tools that can permanently destroy things (e.g. `delete_file`, anything the upstream itself flags as `destructiveHint`). The safety floor strips those out:
+
+- They never appear in the tool list the AI sees (`tools/list`).
+- They can't be called by name either (`tools/call`) — even if the AI already knows the name, the gateway answers "no such tool."
+
+Because the semantic search index is built from the *already-floored* list, a destructive tool is never even embedded — so a clever request like *"clean up the repo"* can't surface `delete_repository`. It's a **guardrail** (*what is unsafe?*), not an authorization system (*who is this caller?*).
+
+### How to add or edit the blocklist
+
+A tool is treated as destructive if the upstream flags it `destructiveHint`, **or** its name contains one of a short list of substrings. That list — the blocklist — lives in one place:
+
+- **Edit the needles:** `app/gateway/github_proxy.py`, the `DESTRUCTIVE_NEEDLES` tuple (defaults to `("delete", "admin")`). Add a substring like `"remove"` or `"force"` to hide more.
+- **Toggle the whole floor:** set `MCPX_BLOCK_DESTRUCTIVE=false` to disable it (default is on).
+- **Go further upstream:** set `MCPX_GITHUB_READONLY=true` to ask GitHub for a read-only catalog, so write/destructive tools never even reach the gateway.
+
+You can see exactly what's blocked on the live dashboard's **"Safety floor"** panel (served by `GET /demo/safety`).
+
 ## Summary
-The database is *only* used as a semantic search engine to figure out which tools to show the LLM. The tools themselves, and the execution of those tools, are 100% official GitHub.
+The database is *only* used as a semantic search engine to figure out which tools to show the LLM. The tools themselves, and the execution of those tools, are 100% official GitHub. And the safety floor guarantees the genuinely destructive tools are never on the table to begin with.

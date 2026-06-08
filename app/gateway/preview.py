@@ -1,21 +1,16 @@
-"""Live, read-only preview of the gateway's retrieval token math.
+"""Live, read-only catalog loaders + safety-floor introspection.
 
-Powers the ``/demo`` dashboard's discovery meter as a literal A/B against two
-*different servers*:
+Two cached loaders proxy the same remote GitHub MCP server the live gateway uses:
 
-* **raw** -- the official remote GitHub MCP server, fetched live: every tool
-  (including the destructive ones the gateway's safety floor hides), full
-  descriptions. The true "flat injection" baseline a client pays with no gateway.
-* **smart** -- this gateway, modelled with the *same* primitives it runs so the
-  numbers match what an MCP client actually pays: the proxied catalog, the safety
-  floor, and -- when a task query is given -- semantic retrieval of the top-k
-  relevant tools via MongoDB ``$vectorSearch``.
+* :func:`_load_catalog` -- the gateway's **safety-floored** catalog (destructive
+  tools dropped), kept byte-for-byte as published. This is also the source of
+  truth for what gets embedded into the route-by-meaning catalog.
+* :func:`_load_raw_catalog` -- the **literal** upstream catalog (every tool,
+  including the destructive ones the floor hides).
 
-The point of the demo is that the smart side changes exactly **one** variable:
-how *many* tools come back. Descriptions are passed through byte-for-byte, so the
-savings are 100% attributable to retrieval, not to trimming text. With no query
-the smart side is the full (safety-floored) catalog; with a query it's only the
-retrieved tools (the big win). Nothing here mutates state.
+:func:`safety_floor_status` diffs the two so the dashboard can show exactly what
+the blocklist hides and why. Everything here is read-only -- nothing mutates
+state, and the floor's behavior is unchanged.
 """
 
 from __future__ import annotations
@@ -26,7 +21,6 @@ from typing import Any
 from fastmcp.tools import Tool
 
 from app.settings import Settings, settings
-from app.tokens import measure_tools
 
 _catalog_cache: list[Tool] | None = None
 _catalog_lock = asyncio.Lock()
@@ -92,68 +86,27 @@ async def _load_raw_catalog() -> list[Any]:
         return _raw_catalog_cache
 
 
-def _tool_view(tool: Any, *, score: float | None = None) -> dict[str, Any]:
-    description = getattr(tool, "description", None) or ""
-    view: dict[str, Any] = {"name": getattr(tool, "name", ""), "description": description}
-    if score is not None:
-        view["score"] = round(score, 4)
-    return view
+async def safety_floor_status(cfg: Settings = settings) -> dict[str, Any]:
+    """Read-only summary of the safety floor for the dashboard.
 
-
-def _side(tools: list[Any], *, mode: str) -> dict[str, Any]:
-    """Measure a tool list exactly as published -- no rewriting, full descriptions."""
-
-    tokens, payload_bytes = measure_tools(tools)
-    return {
-        "mode": mode,
-        "tool_count": len(tools),
-        "list_tokens": tokens,
-        "payload_bytes": payload_bytes,
-        "tools": [_tool_view(t) for t in tools],
-    }
-
-
-async def build_preview(query: str | None = None, cfg: Settings = settings) -> dict[str, Any]:
-    """Return the raw-firehose vs smart-retrieval comparison for an optional task.
-
-    Both sides carry full, byte-for-byte descriptions; the only difference is the
-    number of tools -- so the savings are purely the work of semantic retrieval.
+    Diffs the literal upstream catalog (destructive tools included) against the
+    safety-floored catalog the gateway actually serves, so the UI can show
+    exactly which destructive tools the blocklist hides -- and what drives the
+    decision. Nothing here mutates state or changes what the floor blocks.
     """
 
-    catalog = await _load_catalog()
+    from app.gateway.github_proxy import DESTRUCTIVE_NEEDLES, is_destructive
+
     raw_catalog = await _load_raw_catalog()
-    query = (query or "").strip() or None
-
-    raw = _side(raw_catalog, mode="firehose")
-
-    routed = False
-    smart_tools: list[Tool] = catalog
-    if query and cfg.semantic_retrieval_enabled:
-        from app.persistence.catalog import search_tools
-
-        ranked = await search_tools(query, k=cfg.route_top_k, cfg=cfg)
-        if ranked:
-            by_name = {t.name: t for t in catalog}
-            picked = [by_name[name] for name in ranked if name in by_name]
-            if picked:
-                smart_tools = picked
-                routed = True
-
-    smart = _side(smart_tools, mode="semantic-top-k" if routed else "full-catalog")
-
-    saved = raw["list_tokens"] - smart["list_tokens"]
-    factor = (raw["list_tokens"] / smart["list_tokens"]) if smart["list_tokens"] else None
-
+    floored = await _load_catalog()
+    blocked_names = sorted(
+        getattr(t, "name", "") for t in raw_catalog if is_destructive(t)
+    )
     return {
-        "query": query,
-        "routed": routed,
-        "routing_ready": routed or not query,
-        "route_top_k": cfg.route_top_k,
-        "catalog_size": len(catalog),
-        "raw": raw,
-        "smart": smart,
-        "savings": {
-            "tokens_saved": saved,
-            "factor": round(factor, 2) if factor else None,
-        },
+        "enabled": cfg.block_destructive,
+        "needles": list(DESTRUCTIVE_NEEDLES),
+        "blocked_count": len(blocked_names),
+        "blocked_names": blocked_names,
+        "raw_count": len(raw_catalog),
+        "floored_count": len(floored),
     }

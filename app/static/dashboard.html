@@ -104,6 +104,22 @@
   .status-card.warn { border-color: #4a3c14; background: rgba(42,35,11,.65); }
   .status-card.ok .value { color: var(--smart); }
   .status-card.warn .value { color: var(--gold); }
+  .status-card.danger { border-color: #3a2024; background: rgba(58,32,36,.4); }
+  .status-card.danger .value { color: var(--raw); }
+
+  /* ---------- safety floor ---------- */
+  .floor-state { font-size: 14.5px; line-height: 1.55; margin-bottom: 16px; }
+  .floor-state .on { color: var(--smart); font-weight: 700; }
+  .floor-state .off { color: var(--gold); font-weight: 700; }
+  .floor-state code { color: var(--ink); }
+  .floor-label { color: var(--ink-faint-solid); font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin: 18px 0 9px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { font-family: var(--mono); font-size: 12px; padding: 5px 10px; border-radius: 8px; background: var(--raw-dim); border: 1px solid #5a2a2e; color: #ff9a9a; }
+  .floor-rule { font-size: 13.5px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; }
+  .floor-rule code { color: var(--gold); }
+  .floor-edit { margin-top: 18px; padding: 13px 15px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; line-height: 1.65; color: var(--ink-dim); }
+  .floor-edit b { color: var(--ink); }
+  .floor-edit code { color: var(--accent); }
 
   /* ---------- discovery meter ---------- */
   .meter { display: grid; gap: 14px; }
@@ -207,6 +223,7 @@
     <h1>Same MCP, same model, same task.<br/><span class="grad">A fraction of the bill.</span></h1>
     <p class="sub">MCP just hands a model its tools. Whether that handoff costs twenty thousand tokens or a few hundred is decided <b>above the wire</b> — never by the protocol.</p>
     <p class="thesis">A kitchen-sink server ships the whole binder every turn. A <b>smart MCP gateway with MongoDB</b> embeds the binder once, then — when you just <b>say what you're doing</b> — retrieves only the tools that task needs by <b>meaning</b> (MongoDB <code>$vectorSearch</code>). The tools it hands back are <b>byte-for-byte identical</b> to the firehose — the <i>only</i> thing that changes is how <b>many</b>. Nothing to declare, no key, no cloud: the model runs on your own hardware.</p>
+    <p class="thesis">The one rule it <i>does</i> hardcode: a <b>safety floor</b> that blocks destructive tools (like <code>delete_file</code>) in <b>both</b> directions — never listed, never callable. See <a href="#safety-floor">how it works and how to edit the blocklist</a> below.</p>
     <div class="route-banner">
       <span class="node"><span class="dot gh"></span> Tools via <b>GitHub's official MCP server</b></span>
       <span class="arrow">→</span>
@@ -292,6 +309,26 @@
         <div class="head">The local model paid <span id="sumRaw"></span> tokens to read the binder, <span id="sumSmart"></span> to read only the tools the gateway retrieved.</div>
         <div class="factor-xl" id="sumFactor"></div>
         <div class="proj" id="sumProj"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Safety floor -->
+  <section id="safety-floor">
+    <div class="sec-head"><span class="sec-num">02</span><div class="txt"><h2>The safety floor</h2><p>The <b>only</b> hand-written rule in the gateway — everything else is learned by meaning. Destructive tools never cross the wire, in <i>either</i> direction.</p></div></div>
+    <div class="panel">
+      <div class="floor-state" id="floorState"><span class="muted">Loading the safety floor…</span></div>
+      <div class="status-strip">
+        <div class="status-card"><div class="label">Upstream tools</div><div class="value" id="floorRaw">—</div></div>
+        <div class="status-card danger"><div class="label">Hidden by the floor</div><div class="value" id="floorBlocked">—</div></div>
+        <div class="status-card ok"><div class="label">Served to the model</div><div class="value" id="floorServed">—</div></div>
+      </div>
+      <div class="floor-label">Permanently blocked — invisible to <code>tools/list</code> <i>and</i> <code>tools/call</code></div>
+      <div class="chips" id="floorChips"></div>
+      <div class="floor-label">What counts as destructive (the blocklist)</div>
+      <p class="floor-rule">A tool is blocked if the upstream flags it <code>destructiveHint</code>, or its name contains one of: <span id="floorNeedles"></span>. So a high-scoring semantic match for <i>"clean up the repo"</i> can never hand the model <code>delete_repository</code>.</p>
+      <div class="floor-edit">
+        <b>Add / edit the blocklist.</b> The needles live in <code>app/gateway/github_proxy.py</code> (the <code>DESTRUCTIVE_NEEDLES</code> tuple) — add a substring like <code>"remove"</code> or <code>"force"</code> to hide more. Toggle the whole floor with <code>MCPX_BLOCK_DESTRUCTIVE</code>, or ask the upstream for a read-only catalog with <code>MCPX_GITHUB_READONLY</code>. It's a guardrail (<i>what is unsafe?</i>), not an authorization model (<i>who is this caller?</i>).
       </div>
     </div>
   </section>
@@ -410,12 +447,12 @@ function renderDiscoveryFromBuilt(ev) {
   $("smartStatus").className = "status-card " + (ev.routed ? "ok" : "warn");
   $("smartStatus").querySelector(".value").textContent = ev.routed
     ? "semantic shortlist"
-    : "safe fail-open catalog";
+    : "full catalog (safety-floored)";
   if (ev.routed) {
     const f = smart ? (raw / smart).toFixed(2) : null;
     $("meterVerdict").innerHTML = `The official server ships <b>${fmt(raw)}</b> tokens of tools every turn. The gateway sent <b>${ev.smart.tool_count}</b> of <b>${ev.raw.tool_count}</b> — the same tools, just the ones this task needs — for <b>${fmt(smart)}</b>. That's <span class="factor">${f}×</span> lighter.`;
   } else {
-    $("meterVerdict").innerHTML = `Vector retrieval is not ready yet, so the gateway returned its honest fail-open state: the full safety-floored catalog (<b>${ev.smart.tool_count}</b> tools, <b>${fmt(smart)}</b> tokens). This is <b>not</b> the semantic-retrieval win; the model run stops here instead of demoing the wrong thing.`;
+    $("meterVerdict").innerHTML = `Vector retrieval is not ready yet, so the gateway returned its honest fail-open state: the full catalog with the safety floor still applied (destructive tools dropped) — <b>${ev.smart.tool_count}</b> tools, <b>${fmt(smart)}</b> tokens. This is <b>not</b> the semantic-retrieval win; the model run stops here instead of demoing the wrong thing.`;
   }
 }
 
@@ -510,6 +547,33 @@ function renderSummary(s) {
 
 function finishRun() { RUNNING = false; $("runBtn").disabled = false; $("runBtn").textContent = "▶ Run live comparison"; }
 
+/* ---------- safety floor ---------- */
+async function loadSafetyFloor() {
+  try {
+    renderSafetyFloor(await api("/demo/safety"));
+  } catch (e) {
+    $("floorState").innerHTML = '<span class="muted">Safety floor status unavailable — start the gateway with a GitHub PAT to populate it. The floor still runs; this panel just can\'t read the live catalog.</span>';
+  }
+}
+function renderSafetyFloor(s) {
+  $("floorRaw").textContent = fmt(s.raw_count);
+  $("floorServed").textContent = fmt(s.floored_count);
+  $("floorBlocked").textContent = fmt(s.blocked_count);
+  const n = s.blocked_count, plural = n === 1 ? "" : "s";
+  $("floorState").innerHTML = s.enabled
+    ? `<span class="on">● Active</span> — <b>${fmt(n)}</b> destructive tool${plural} of <b>${fmt(s.raw_count)}</b> ${n === 1 ? "is" : "are"} hidden from the model entirely, leaving <b>${fmt(s.floored_count)}</b> safe tools to route over.`
+    : `<span class="off">○ Disabled</span> — the floor is off (<code>MCPX_BLOCK_DESTRUCTIVE=false</code>); <b>${fmt(n)}</b> destructive tool${plural} would be hidden if you turned it on.`;
+  const chips = $("floorChips");
+  chips.innerHTML = "";
+  const names = s.blocked_names || [];
+  if (!names.length) {
+    chips.innerHTML = '<span class="muted">No destructive tools detected in the current upstream catalog.</span>';
+  } else {
+    names.forEach(name => { const el = document.createElement("span"); el.className = "chip"; el.textContent = name; chips.appendChild(el); });
+  }
+  $("floorNeedles").innerHTML = (s.needles || []).map(x => `<code>${escapeHtml(x)}</code>`).join(", ") || "<code>(none)</code>";
+}
+
 $("runBtn").addEventListener("click", async () => {
   if (RUNNING) return;
   if (!CONFIG.local_ready) { $("runErr").style.display = "block"; $("runErr").textContent = "No local Ollama runtime detected. Start it with `ollama serve` and pull a model."; return; }
@@ -558,6 +622,8 @@ async function boot() {
   ls.textContent = CONFIG.local_ready ? "● Ollama on-device" : "○ start Ollama to run";
 
   if (CONFIG.tasks && CONFIG.tasks.length) { renderTasks(); selectTask(0); }
+
+  loadSafetyFloor();
 }
 boot();
 </script>

@@ -126,6 +126,15 @@ tools are never even embedded, so they can never be retrieved. The destructive
 `delete_file` is gone for everyone, permanently. This is a *guardrail*, not an
 authorization model — it answers "what is unsafe?", never "who is this caller?".
 
+**Where the blocklist lives / how to edit it.** The destructive judgement is
+`is_destructive()` in `app/gateway/github_proxy.py`: it returns true on the
+upstream's `destructiveHint`, or when the tool name contains one of the
+`DESTRUCTIVE_NEEDLES` substrings (default `("delete", "admin")`). To widen the
+blocklist, add a needle; to turn the floor off, set `MCPX_BLOCK_DESTRUCTIVE=false`;
+to drop write tools at the source, set `MCPX_GITHUB_READONLY=true`. The read-only
+`GET /demo/safety` endpoint diffs the raw vs floored catalogs so the dashboard's
+**Safety floor** panel can show exactly what's hidden and why.
+
 ### 3.2 `SemanticFilterMiddleware` — the per-request brain (`app/gateway/middleware.py`)
 
 On `on_list_tools` it:
@@ -333,7 +342,7 @@ hand-written policy — and not in trimming a single byte of tool text.**
 | `app/gateway/headers.py` | The one request-header helper (`x-mcp-query`) |
 | `app/gateway/transforms.py` | `SafetyFloorTransform` — the only static rule (drop destructive tools) |
 | `app/gateway/middleware.py` | `SemanticFilterMiddleware`: per-request retrieval, cache, telemetry |
-| `app/gateway/preview.py` | Read-only `/demo/preview` firehose-vs-semantic token math, reusing the live primitives |
+| `app/gateway/preview.py` | Read-only catalog loaders (raw + safety-floored) + `safety_floor_status()` behind `/demo/safety` |
 | `app/gateway/playground.py` | Live on-device A/B driver (raw vs smart, streamed) |
 | `app/persistence/client.py` | Async Mongo lifecycle; no-op mode when unconfigured |
 | `app/persistence/telemetry.py` | Token telemetry + invocation audit writers (redacted, fire-and-forget) |

@@ -17,19 +17,32 @@ from fastmcp.server import create_proxy
 
 from app.settings import Settings, settings
 
-# Belt-and-suspenders fallback on top of the upstream's own ``destructiveHint``.
-_DESTRUCTIVE_NEEDLES = ("delete", "admin")
+# ---------------------------------------------------------------------------
+# THE BLOCKLIST -- edit here.
+#
+# This is the gateway's hand-written safety blocklist: the substrings that, when
+# found in a tool's name, mark it destructive so the safety floor hides it (in
+# *both* directions -- list and call). It is a belt-and-suspenders fallback on
+# top of the upstream's own ``destructiveHint`` annotation.
+#
+# To add/edit the blocklist: change the needles below (lowercase, matched as a
+# substring of the tool name, e.g. add ``"remove"`` or ``"force"``). Toggle the
+# whole floor with ``MCPX_BLOCK_DESTRUCTIVE``; ask the upstream for a read-only
+# catalog with ``MCPX_GITHUB_READONLY``. See the "Safety floor" docs in README.md.
+# ---------------------------------------------------------------------------
+DESTRUCTIVE_NEEDLES = ("delete", "admin")
 
 
 def is_destructive(tool: Any) -> bool:
     """True if a tool mutates/destroys state -- the upstream's destructive hint,
-    or a delete/admin name as a fallback. Used only by the safety floor."""
+    or a name matching the :data:`DESTRUCTIVE_NEEDLES` blocklist as a fallback.
+    Used only by the safety floor."""
 
     annotations = getattr(tool, "annotations", None)
     if annotations is not None and getattr(annotations, "destructiveHint", False):
         return True
     name = (getattr(tool, "name", "") or "").lower()
-    return any(needle in name for needle in _DESTRUCTIVE_NEEDLES)
+    return any(needle in name for needle in DESTRUCTIVE_NEEDLES)
 
 
 def build_github_proxy(cfg: Settings = settings, *, name: str = "Lean-MCP-Gateway") -> FastMCP:
