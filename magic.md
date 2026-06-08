@@ -73,19 +73,19 @@ Because the semantic search index is built from the *already-floored* list, a de
 
 ### How does it know a tool is destructive?
 
-It trusts GitHub's own labels first, and only guesses from the name as a last resort:
+It uses GitHub's own labels — and *only* those labels:
 
-1. If GitHub marks a tool **read-only** (`readOnlyHint`), it's always allowed — it can't destroy anything. (This is why a read-only tool like `list_org_admins` is *not* blocked, even though it has "admin" in the name.)
-2. If GitHub marks it **destructive** (`destructiveHint`), it's blocked.
-3. Only if GitHub gives *no* label does the gateway fall back to the name: it blocks a tool whose name contains a clearly destructive verb — `delete`, `destroy`, `purge`, `erase`, `wipe` — matched as a whole word (so `delete_file` is caught, but `list_org_admins` is not).
+1. If GitHub marks a tool **read-only** (`readOnlyHint`), it's always allowed — it can't destroy anything.
+2. If GitHub marks it **destructive** (`destructiveHint`), it's blocked — in both directions.
+3. If GitHub gives *no* label, the gateway takes the tool at face value and leaves it alone. It does **not** guess from the name. (GitHub flags `delete_file` as `destructiveHint`, so it's caught — but it leaves `label_write` and `manage_notification_subscription`, both of which can *delete*, unlabeled. A name-matching trick would miss those too, which is exactly why annotating for risk is the **server author's** job, not the gateway's job to guess.)
 
-### How to add or edit the blocklist
+### How to tune the floor
 
-It all lives in `is_destructive()` in `app/gateway/github_proxy.py`:
+It all lives in `is_destructive()` in `app/gateway/github_proxy.py` — which reads the upstream's annotations and nothing else:
 
-- **Widen the name backstop:** add an unambiguous destructive verb to the `DESTRUCTIVE_NEEDLES` tuple (e.g. `"truncate"`).
 - **Toggle the whole floor:** set `MCPX_BLOCK_DESTRUCTIVE=false` to disable it (default is on).
 - **Go further upstream:** set `MCPX_GITHUB_READONLY=true` to ask GitHub for a read-only catalog, so write/destructive tools never even reach the gateway.
+- **Cover a missed tool:** the durable fix is upstream — get the tool annotated `destructiveHint`. The gateway keeps no name list of its own.
 
 You can see exactly what's blocked on the live dashboard's **"Safety floor"** panel (served by `GET /demo/safety`).
 

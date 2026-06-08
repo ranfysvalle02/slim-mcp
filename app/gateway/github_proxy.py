@@ -9,7 +9,6 @@ tools a caller sees is decided by semantic retrieval, not by hand.
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from fastmcp import Client, FastMCP
@@ -19,55 +18,44 @@ from fastmcp.server import create_proxy
 from app.settings import Settings, settings
 
 # ---------------------------------------------------------------------------
-# THE BLOCKLIST -- edit here.
+# THE SAFETY FLOOR -- annotation-only, the philosophy lives here.
 #
-# The authoritative signal is the upstream's own MCP tool annotations
-# (``readOnlyHint`` / ``destructiveHint``), which :func:`is_destructive` trusts
-# first. These needles are only a *backstop* for tools the upstream leaves
-# UNannotated -- so we keep the set tiny and unambiguous: catastrophic, clearly
-# irreversible verbs. They are matched as whole words in the tool name (see
-# :func:`_name_looks_destructive`), never as loose substrings -- so a read-only
-# tool like ``list_org_admins`` is never mistaken for a destructive one.
+# The floor leans *entirely* on the upstream's own MCP tool annotations
+# (``readOnlyHint`` / ``destructiveHint``). The gateway makes no guess of its
+# own: a tool is destructive iff the upstream *says* so. There is deliberately
+# no name-based heuristic -- inferring "delete" from a tool name is unreliable
+# (it sails right past a ``label_write`` tool whose ``delete`` lives in a method
+# parameter, while offering a false sense of safety), and it is the wrong layer
+# for the fix. Annotating tools for risk is the MCP *server author's* job; a
+# downstream gateway papering over missing annotations with string-matching only
+# hides the real gap.
 #
-# To widen the backstop, add another unambiguous destructive verb (lowercase,
-# e.g. ``"truncate"``). Toggle the whole floor with ``MCPX_BLOCK_DESTRUCTIVE``;
-# ask the upstream for a read-only catalog with ``MCPX_GITHUB_READONLY``. See the
-# "Safety floor" docs in README.md.
+# Toggle the whole floor with ``MCPX_BLOCK_DESTRUCTIVE``; ask the upstream for a
+# read-only catalog with ``MCPX_GITHUB_READONLY``. See the "Safety floor" docs
+# in README.md.
 # ---------------------------------------------------------------------------
-DESTRUCTIVE_NEEDLES = ("delete", "destroy", "purge", "erase", "wipe")
-
-# Split a tool name into lowercase word tokens (snake_case, kebab-case, etc.) so
-# the backstop matches whole words -- ``delete`` in ``delete_file`` -- and never
-# a fragment buried in an unrelated word.
-_WORD_SPLIT = re.compile(r"[^a-z0-9]+")
-
-
-def _name_looks_destructive(name: str) -> bool:
-    """Backstop heuristic: does a tool name contain a destructive verb as a *word*?"""
-
-    tokens = _WORD_SPLIT.split(name.lower())
-    return any(token in DESTRUCTIVE_NEEDLES for token in tokens)
 
 
 def is_destructive(tool: Any) -> bool:
     """True if a tool destroys state, used only by the safety floor.
 
-    Leans on the upstream's own MCP annotations, which are authoritative:
+    Decided *entirely* by the upstream's own MCP annotations, which are
+    authoritative:
 
     1. ``readOnlyHint`` -> never destructive (a read-only tool can't destroy
        anything). This is what stops false positives like a "list admins" tool.
     2. ``destructiveHint`` -> destructive, full stop.
-    3. Otherwise (typically a tool the upstream left unannotated), fall back to a
-       conservative whole-word match on unambiguous destructive verbs in the name.
+    3. Otherwise (no annotation object, or the upstream left the hints unset) ->
+       treated as non-destructive. The gateway does not guess from the tool
+       name; supplying accurate annotations is the upstream server's job.
     """
 
     annotations = getattr(tool, "annotations", None)
-    if annotations is not None:
-        if getattr(annotations, "readOnlyHint", None):
-            return False
-        if getattr(annotations, "destructiveHint", None):
-            return True
-    return _name_looks_destructive(getattr(tool, "name", "") or "")
+    if annotations is None:
+        return False
+    if getattr(annotations, "readOnlyHint", None):
+        return False
+    return bool(getattr(annotations, "destructiveHint", None))
 
 
 def build_github_proxy(cfg: Settings = settings, *, name: str = "Lean-MCP-Gateway") -> FastMCP:

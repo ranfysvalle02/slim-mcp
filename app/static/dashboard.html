@@ -326,9 +326,9 @@
       <div class="floor-label">Permanently blocked — invisible to <code>tools/list</code> <i>and</i> <code>tools/call</code></div>
       <div class="chips" id="floorChips"></div>
       <div class="floor-label">What counts as destructive</div>
-      <p class="floor-rule">The gateway trusts the upstream's own MCP annotations first: a tool flagged <code>readOnlyHint</code> is never blocked, and one flagged <code>destructiveHint</code> always is. For tools the upstream leaves <i>unannotated</i>, a backstop blocks names that include a destructive verb (matched as a whole word): <span id="floorNeedles"></span>. So a high-scoring semantic match for <i>"clean up the repo"</i> can never hand the model <code>delete_repository</code> — while a read-only tool like <code>list_org_admins</code> is left alone.</p>
+      <p class="floor-rule">The gateway leans <i>entirely</i> on the upstream's own MCP annotations: a tool flagged <code>readOnlyHint</code> is never blocked, and one flagged <code>destructiveHint</code> always is — in both directions. There's no name-guessing: if the upstream doesn't annotate a tool, the gateway won't invent a verdict for it. GitHub flags <code>delete_file</code> as <code>destructiveHint</code>, so a high-scoring semantic match for <i>"clean up the repo"</i> can never hand it to the model — while a read-only tool is left alone. Annotating tools for risk is the MCP <b>server author's</b> job; that's the right layer for "what is unsafe?", not a downstream string match.</p>
       <div class="floor-edit">
-        <b>Add / edit the blocklist.</b> Detection is <code>is_destructive()</code> in <code>app/gateway/github_proxy.py</code>; the backstop verbs are the <code>DESTRUCTIVE_NEEDLES</code> tuple — add an unambiguous verb like <code>"truncate"</code> to widen it. Toggle the whole floor with <code>MCPX_BLOCK_DESTRUCTIVE</code>, or ask the upstream for a read-only catalog with <code>MCPX_GITHUB_READONLY</code>. It's a guardrail (<i>what is unsafe?</i>), not an authorization model (<i>who is this caller?</i>).
+        <b>Tune the floor.</b> The verdict is <code>is_destructive()</code> in <code>app/gateway/github_proxy.py</code> — it reads the upstream's <code>readOnlyHint</code>/<code>destructiveHint</code> and nothing else. To cover a tool the upstream forgot to flag, fix it at the source (annotate the tool upstream, or ask for a read-only catalog with <code>MCPX_GITHUB_READONLY</code>); toggle the whole floor with <code>MCPX_BLOCK_DESTRUCTIVE</code>. It's a guardrail (<i>what is unsafe?</i>), not an authorization model (<i>who is this caller?</i>).
       </div>
     </div>
   </section>
@@ -571,7 +571,6 @@ function renderSafetyFloor(s) {
   } else {
     names.forEach(name => { const el = document.createElement("span"); el.className = "chip"; el.textContent = name; chips.appendChild(el); });
   }
-  $("floorNeedles").innerHTML = (s.needles || []).map(x => `<code>${escapeHtml(x)}</code>`).join(", ") || "<code>(none)</code>";
 }
 
 $("runBtn").addEventListener("click", async () => {

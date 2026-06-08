@@ -95,7 +95,7 @@ async def safety_floor_status(cfg: Settings = settings) -> dict[str, Any]:
     decision. Nothing here mutates state or changes what the floor blocks.
     """
 
-    from app.gateway.github_proxy import DESTRUCTIVE_NEEDLES, is_destructive
+    from app.gateway.github_proxy import is_destructive
 
     raw_catalog = await _load_raw_catalog()
     floored = await _load_catalog()
@@ -104,7 +104,6 @@ async def safety_floor_status(cfg: Settings = settings) -> dict[str, Any]:
     )
     return {
         "enabled": cfg.block_destructive,
-        "needles": list(DESTRUCTIVE_NEEDLES),
         "blocked_count": len(blocked_names),
         "blocked_names": blocked_names,
         "raw_count": len(raw_catalog),

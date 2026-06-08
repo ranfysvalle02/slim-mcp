@@ -1,5 +1,7 @@
 # mcpx-demo — Smart MCP Gateway
 
+![](mdb-smart-gateway.png)
+
 A token-disciplined, **route-by-meaning** gateway for the **Model Context
 Protocol (MCP)**. It sits in front of your MCP tools and stops the "flat
 injection" anti-pattern — dumping every tool description into the model's context
@@ -15,6 +17,12 @@ pull request"* and it hands back the **8 tools that task needs** — **byte-for-
 identical** to the firehose, just 8 instead of 93 — for a **~8.8× lighter** handoff.
 Same protocol, same model, same task; the *only* thing that changes is how many
 tools cross the wire. All you need is a GitHub Personal Access Token.
+
+This isn't a fringe idea: the same route-by-meaning pattern now ships as a managed
+feature in AWS's Bedrock AgentCore Gateway (its built-in
+[`x_amz_bedrock_agentcore_search`](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-using-mcp-semantic-search.html)
+tool) and in Anthropic's tool search — confirmation that the fix lives at the
+gateway layer, not in the MCP protocol.
 
 > Want the why behind it? Read [`blog.md`](./blog.md) —
 > *"How a Few Bad MCP Servers Pushed Us to Build a Gateway on MongoDB"* — and its
@@ -46,10 +54,10 @@ The gateway is a single FastAPI process that mounts a FastMCP server at `/mcp`.
 Two layers keep the model's context lean — and only one of them touches tokens:
 
 1. **`SafetyFloorTransform`** — the safety floor and the *only* hand-written rule.
-   Destructive tools (those the upstream flags `destructiveHint`, plus a
-   whole-word name backstop like `delete_file` for unannotated tools) are *never*
-   exposed — in both directions, so a semantic match can never surface (nor a
-   client invoke) one.
+   Destructive tools — those the upstream flags `destructiveHint` (e.g. GitHub's
+   `delete_file`) — are *never* exposed, in both directions, so a semantic match
+   can never surface (nor a client invoke) one. The verdict comes entirely from
+   the upstream's MCP annotations; the gateway never guesses from a tool's name.
 2. **`SemanticFilterMiddleware`** — the per-request brain, and the whole token
    story. It reads the caller's free-form `X-MCP-Query`. If present (and the
    embedded catalog is ready), it retrieves the top-k tools by *meaning* — one
@@ -121,32 +129,37 @@ on). You can see exactly what it hides on the dashboard's **Safety floor** panel
 #### How a tool is judged destructive
 
 `is_destructive()` in [`app/gateway/github_proxy.py`](./app/gateway/github_proxy.py)
-leans on the upstream's own MCP tool annotations, which are authoritative, and
-only falls back to the tool name when they're absent:
+reads the upstream's own MCP tool annotations and nothing else — they're the
+authoritative signal:
 
 1. **`readOnlyHint` → never destructive.** A tool the upstream marks read-only
-   can't destroy anything, so it's always allowed. This is what keeps a read-only
-   tool like `list_org_admins` from being hidden — the old `*admin*` substring
-   rule used to catch it by mistake.
-2. **`destructiveHint` → destructive.** The upstream's explicit flag wins.
-3. **Name backstop (unannotated tools only).** If there's no annotation to go on,
-   the name is split into words and blocked if any word is an unambiguous
-   destructive verb — the `DESTRUCTIVE_NEEDLES` set (`delete`, `destroy`, `purge`,
-   `erase`, `wipe`). Whole-word matching means `delete_file` is caught but
-   `list_org_admins` is not.
+   can't destroy anything, so it's always allowed.
+2. **`destructiveHint` → destructive.** The upstream's explicit flag wins; the
+   tool is hidden in both directions.
+3. **Unannotated → taken at face value.** If the upstream supplies no risk hint,
+   the gateway does *not* guess from the name — it leaves the tool exposed. That
+   isn't a gap to paper over with string-matching; it's a missing annotation, and
+   the right place to fix it is the upstream server. Annotations are the MCP
+   spec's risk vocabulary, and they double as a signal that helps a model pick the
+   *right* tool, not just the *safe* one. GitHub, for instance, flags `delete_file`
+   `destructiveHint` but leaves `label_write` and `manage_notification_subscription`
+   — both of which expose a `delete` method — unannotated; a name backstop would
+   sail right past those, which is exactly why guessing from names is the wrong
+   layer for the fix.
 
-#### Customize the blocklist
+#### Customize the floor
 
-Three levers:
+Two levers — plus the real fix, which is annotation:
 
-- **Widen the backstop** — add an unambiguous destructive verb to the
-  `DESTRUCTIVE_NEEDLES` tuple (lowercase, matched as a whole word in the tool
-  name, e.g. `"truncate"`).
 - **Toggle the floor** — `MCPX_BLOCK_DESTRUCTIVE=false` disables it entirely
   (default on). The catalog still loads; nothing is hidden.
 - **Filter at the source** — `MCPX_GITHUB_READONLY=true` asks the upstream GitHub
   MCP server for a read-only catalog, so write/destructive tools never reach the
   gateway in the first place.
+
+To cover a tool the upstream forgot to flag, the durable fix lives upstream: get
+the tool annotated `destructiveHint` (or run the catalog read-only). The gateway
+deliberately keeps no list of "scary" tool names of its own.
 
 Because the retrieval catalog is built from the *floored* tool list, anything the
 floor drops is never embedded — so it can't be retrieved *or* invoked.
@@ -167,7 +180,7 @@ mock.
 | Endpoint                | What it returns                                              |
 | ----------------------- | ----------------------------------------------------------- |
 | `GET /` · `GET /demo`   | The live token-savings dashboard (HTML).                    |
-| `GET /demo/safety`      | Read-only view of the safety floor: how many destructive tools the blocklist hides, which ones, the active needles, and whether the floor is enabled. Powers the dashboard's **Safety floor** panel. |
+| `GET /demo/safety`      | Read-only view of the safety floor: how many destructive tools the floor hides, which ones, and whether the floor is enabled. Powers the dashboard's **Safety floor** panel. |
 | `GET /demo/try/config`  | Config for the live "try it yourself" panel (local-runtime readiness + detected Ollama models, demo tasks). |
 | `POST /demo/try`        | Runs a task through a **local** model twice (raw vs smart) and returns the model's own token usage, per-pass latency, and tool pick. Fully on-device via Ollama — no key, nothing leaves the machine. The smart pass hands the gateway the task as `x-mcp-query`. |
 | `POST /demo/try/stream` | Same run as `POST /demo/try`, but streamed as Server-Sent Events (`infer` → `token` → `result` → `summary`) so the dashboard can show prefill, live token output, and per-pass timing. |
