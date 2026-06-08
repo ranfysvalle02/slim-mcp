@@ -101,9 +101,10 @@ never their text.* They survive as optional add-ons (§3.3).
 ### 3.1 `SafetyFloorTransform` — the safety floor (`app/gateway/transforms.py`)
 
 The simplest and most important layer, and the *only* hand-written rule in the
-gateway. It drops any tool `is_destructive()` flags (the upstream's own
-`destructiveHint`, or a `delete`/`admin` name as a fallback), in **both**
-directions:
+gateway. It drops any tool `is_destructive()` flags — the upstream's own
+annotations are authoritative (`readOnlyHint` ⇒ always safe, `destructiveHint` ⇒
+destructive), with a conservative whole-word name match as a backstop only for
+unannotated tools — in **both** directions:
 
 ```python
 async def list_tools(self, tools):
@@ -127,13 +128,17 @@ tools are never even embedded, so they can never be retrieved. The destructive
 authorization model — it answers "what is unsafe?", never "who is this caller?".
 
 **Where the blocklist lives / how to edit it.** The destructive judgement is
-`is_destructive()` in `app/gateway/github_proxy.py`: it returns true on the
-upstream's `destructiveHint`, or when the tool name contains one of the
-`DESTRUCTIVE_NEEDLES` substrings (default `("delete", "admin")`). To widen the
-blocklist, add a needle; to turn the floor off, set `MCPX_BLOCK_DESTRUCTIVE=false`;
-to drop write tools at the source, set `MCPX_GITHUB_READONLY=true`. The read-only
-`GET /demo/safety` endpoint diffs the raw vs floored catalogs so the dashboard's
-**Safety floor** panel can show exactly what's hidden and why.
+`is_destructive()` in `app/gateway/github_proxy.py`. It leans on the upstream's
+MCP annotations first — `readOnlyHint` short-circuits to *safe* (so a read-only
+`list_org_admins` is never hidden), and `destructiveHint` short-circuits to
+*destructive*. Only when a tool is unannotated does it fall back to a whole-word
+match against `DESTRUCTIVE_NEEDLES` — a tiny set of unambiguous destructive verbs
+(`delete`, `destroy`, `purge`, `erase`, `wipe`), tokenized so `delete_file` is
+caught but `list_org_admins` is not. To widen the backstop, add a verb; to turn
+the floor off, set `MCPX_BLOCK_DESTRUCTIVE=false`; to drop write tools at the
+source, set `MCPX_GITHUB_READONLY=true`. The read-only `GET /demo/safety` endpoint
+diffs the raw vs floored catalogs so the dashboard's **Safety floor** panel can
+show exactly what's hidden and why.
 
 ### 3.2 `SemanticFilterMiddleware` — the per-request brain (`app/gateway/middleware.py`)
 

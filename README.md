@@ -46,9 +46,10 @@ The gateway is a single FastAPI process that mounts a FastMCP server at `/mcp`.
 Two layers keep the model's context lean — and only one of them touches tokens:
 
 1. **`SafetyFloorTransform`** — the safety floor and the *only* hand-written rule.
-   Destructive tools (those the upstream flags `destructiveHint`, or whose name
-   contains `delete`/`admin`, e.g. `delete_file`) are *never* exposed — in both
-   directions, so a semantic match can never surface (nor a client invoke) one.
+   Destructive tools (those the upstream flags `destructiveHint`, plus a
+   whole-word name backstop like `delete_file` for unannotated tools) are *never*
+   exposed — in both directions, so a semantic match can never surface (nor a
+   client invoke) one.
 2. **`SemanticFilterMiddleware`** — the per-request brain, and the whole token
    story. It reads the caller's free-form `X-MCP-Query`. If present (and the
    embedded catalog is ready), it retrieves the top-k tools by *meaning* — one
@@ -109,8 +110,7 @@ The gateway's entire interface is **one header** — just say what you're doing:
 
 ### Safety floor
 
-Destructive tools (`delete_*`, `*admin*`, or anything the upstream flags
-`destructiveHint`) are *never* exposed — not in `tools/list`, and not callable by
+Destructive tools are *never* exposed — not in `tools/list`, and not callable by
 name (a blocked call is indistinguishable from a nonexistent tool). This is the
 only static rule in the gateway, and it's a guardrail, not an authorization model:
 it just guarantees a high-scoring semantic match for *"clean up the repo"* can't
@@ -118,16 +118,30 @@ hand the model `delete_repository`. Toggle with `MCPX_BLOCK_DESTRUCTIVE` (defaul
 on). You can see exactly what it hides on the dashboard's **Safety floor** panel
 (or `GET /demo/safety`).
 
+#### How a tool is judged destructive
+
+`is_destructive()` in [`app/gateway/github_proxy.py`](./app/gateway/github_proxy.py)
+leans on the upstream's own MCP tool annotations, which are authoritative, and
+only falls back to the tool name when they're absent:
+
+1. **`readOnlyHint` → never destructive.** A tool the upstream marks read-only
+   can't destroy anything, so it's always allowed. This is what keeps a read-only
+   tool like `list_org_admins` from being hidden — the old `*admin*` substring
+   rule used to catch it by mistake.
+2. **`destructiveHint` → destructive.** The upstream's explicit flag wins.
+3. **Name backstop (unannotated tools only).** If there's no annotation to go on,
+   the name is split into words and blocked if any word is an unambiguous
+   destructive verb — the `DESTRUCTIVE_NEEDLES` set (`delete`, `destroy`, `purge`,
+   `erase`, `wipe`). Whole-word matching means `delete_file` is caught but
+   `list_org_admins` is not.
+
 #### Customize the blocklist
 
-A tool is judged destructive in [`app/gateway/github_proxy.py`](./app/gateway/github_proxy.py)
-by `is_destructive()`: it returns true if the upstream annotates the tool
-`destructiveHint`, **or** the tool's name contains one of a short list of
-substrings — the blocklist. There are three levers:
+Three levers:
 
-- **Edit the needles** — change the `DESTRUCTIVE_NEEDLES` tuple (defaults to
-  `("delete", "admin")`). Each entry is a lowercase substring matched against the
-  tool name, so adding `"remove"` or `"force"` immediately widens what's hidden.
+- **Widen the backstop** — add an unambiguous destructive verb to the
+  `DESTRUCTIVE_NEEDLES` tuple (lowercase, matched as a whole word in the tool
+  name, e.g. `"truncate"`).
 - **Toggle the floor** — `MCPX_BLOCK_DESTRUCTIVE=false` disables it entirely
   (default on). The catalog still loads; nothing is hidden.
 - **Filter at the source** — `MCPX_GITHUB_READONLY=true` asks the upstream GitHub
@@ -135,7 +149,7 @@ substrings — the blocklist. There are three levers:
   gateway in the first place.
 
 Because the retrieval catalog is built from the *floored* tool list, anything the
-blocklist drops is never embedded — so it can't be retrieved *or* invoked.
+floor drops is never embedded — so it can't be retrieved *or* invoked.
 
 ### Upstream: the real GitHub MCP server (proxied)
 

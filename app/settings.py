@@ -37,10 +37,12 @@ class Settings(BaseSettings):
     query_header: str = Field(default="x-mcp-query")
 
     # --- Safety floor -------------------------------------------------------
-    # The only static rule: hide destructive tools (those the upstream flags
-    # ``destructiveHint``, or whose name contains delete/admin) by default, in
-    # both directions (list and call). Not an authorization policy -- just a
-    # guardrail so a semantic match can never surface `delete_file`.
+    # The only static rule: hide destructive tools by default, in both
+    # directions (list and call). The judgement leans on the upstream's own MCP
+    # annotations (``readOnlyHint`` / ``destructiveHint``), with a conservative
+    # whole-word name match as a backstop for unannotated tools. Not an
+    # authorization policy -- just a guardrail so a semantic match can never
+    # surface `delete_file`.
     block_destructive: bool = Field(default=True)
 
     list_cache_ttl_seconds: float = Field(default=5.0)

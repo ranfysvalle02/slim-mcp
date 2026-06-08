@@ -71,11 +71,19 @@ GitHub's catalog includes tools that can permanently destroy things (e.g. `delet
 
 Because the semantic search index is built from the *already-floored* list, a destructive tool is never even embedded — so a clever request like *"clean up the repo"* can't surface `delete_repository`. It's a **guardrail** (*what is unsafe?*), not an authorization system (*who is this caller?*).
 
+### How does it know a tool is destructive?
+
+It trusts GitHub's own labels first, and only guesses from the name as a last resort:
+
+1. If GitHub marks a tool **read-only** (`readOnlyHint`), it's always allowed — it can't destroy anything. (This is why a read-only tool like `list_org_admins` is *not* blocked, even though it has "admin" in the name.)
+2. If GitHub marks it **destructive** (`destructiveHint`), it's blocked.
+3. Only if GitHub gives *no* label does the gateway fall back to the name: it blocks a tool whose name contains a clearly destructive verb — `delete`, `destroy`, `purge`, `erase`, `wipe` — matched as a whole word (so `delete_file` is caught, but `list_org_admins` is not).
+
 ### How to add or edit the blocklist
 
-A tool is treated as destructive if the upstream flags it `destructiveHint`, **or** its name contains one of a short list of substrings. That list — the blocklist — lives in one place:
+It all lives in `is_destructive()` in `app/gateway/github_proxy.py`:
 
-- **Edit the needles:** `app/gateway/github_proxy.py`, the `DESTRUCTIVE_NEEDLES` tuple (defaults to `("delete", "admin")`). Add a substring like `"remove"` or `"force"` to hide more.
+- **Widen the name backstop:** add an unambiguous destructive verb to the `DESTRUCTIVE_NEEDLES` tuple (e.g. `"truncate"`).
 - **Toggle the whole floor:** set `MCPX_BLOCK_DESTRUCTIVE=false` to disable it (default is on).
 - **Go further upstream:** set `MCPX_GITHUB_READONLY=true` to ask GitHub for a read-only catalog, so write/destructive tools never even reach the gateway.
 
