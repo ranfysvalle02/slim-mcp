@@ -291,7 +291,7 @@ db.tools.aggregate([
 
 One query. Two retrieval strategies, each producing its own ranked list. `$rankFusion` blends those lists by position — so you don't have to hand-tune how a text-relevance score compares to a vector-similarity score, which is the usual headache with hybrid search. No second database in the loop, and because the keyword and vector pipelines run over the *same* `tool_catalog` documents, it's a drop-in upgrade rather than a new system.
 
-**What the gateway actually ships today, though, is the meaning arm alone** — one `$vectorSearch` over the embedded catalog, top-k back, nothing fused. That's deliberate: keeping retrieval to a single mechanism means the headline ~8.8× token win is attributable to *one* clean move (retrieve fewer tools, text untouched), with nothing to confound it. Hybrid is the evolution path this heading promises — a "go further" lever you can reach for, not a missing piece the demo depends on.
+**What the gateway actually ships today, though, is the meaning arm alone** — one `$vectorSearch` over the embedded catalog, top-k back, nothing fused. That's deliberate: keeping retrieval to a single mechanism means the headline ~8.8× token win is attributable to *one* clean move (retrieve fewer tools, text untouched), with nothing to confound it. Hybrid is the evolution path this heading promises, not a missing piece the demo depends on.
 
 ### The analytics you get for free: complex aggregations
 
@@ -331,7 +331,6 @@ I want to be straight about what's built versus what the platform unlocks. The s
 
 - **Keyword + hybrid routing** — `$search` / `$rankFusion`, no new system.
 - **Identity-bound scope** — a metadata `filter` on the same query, driven by *verified* identity.
-- **Response compaction / Code Mode** — the output half of the bill (see below).
 
 The rest of this section is the detail behind those bullets.
 
@@ -375,7 +374,7 @@ What the demo deliberately does *not* ship is per-caller **authorization** — *
 
 Token bloat has a second face, and it lands the moment a tool *runs*: the model calls a tool and the raw payload — a giant CRM JSON blob, thousands of lines of telemetry, a verbose stack trace — dumps straight back into the context. That's **response bloat**, the output-side mirror of the schema dump (Zero-Shot Labs named the broader "token bloat"; StackOne frames the output side most sharply), and it degrades reasoning the same way the binder does: attention dilutes, latency climbs, follow-on tool picks get worse.
 
-**This gateway tackles the input half only, on purpose** — but the output fixes are well understood for the day they become your bottleneck. The light one is a deterministic **response compactor** on `tools/call`: drop null/empty noise, cap long arrays, truncate oversized strings, always leaving a `truncated`/`next_cursor` escape hatch. The striking one is StackOne's **"Code Mode"** — instead of ingesting a payload, the model writes a script that filters the data in a sandbox and returns only the distilled answer, turning 14,000 tokens of raw data into a ~500-token summary (a **96% cut**; Cloudflare and Block's *Goose* ship similar sandboxes). Both stack cleanly on top of retrieval — and we keep them out of the core deliberately, because they change *what the model reads*, and this demo's whole point is one unimpeachable claim: *we changed only how many tools the model sees, never their text.* (An earlier build did ship the compactor inline; we pulled it after measuring that the comparable input-side trim contributed barely ~1% of the headline delta. The honesty was worth more than the percent.)
+**This gateway tackles the input half only, on purpose** — but the output fixes are well understood for the day they become your bottleneck. The light one is a deterministic **response compactor** on `tools/call`: drop null/empty noise, cap long arrays, truncate oversized strings, always leaving a `truncated`/`next_cursor` escape hatch. The striking one is StackOne's **"Code Mode"** — instead of ingesting a payload, the model writes a script that filters the data in a sandbox and returns only the distilled answer, turning 14,000 tokens of raw data into a ~500-token summary (a **96% cut**; Cloudflare and Block's *Goose* ship similar sandboxes). Both stack cleanly on top of retrieval — and we keep them out of the core deliberately, because they change *what the model reads*, and this demo's whole point is one unimpeachable claim: *we changed only how many tools the model sees, never their text.*
 
 ---
 

@@ -88,10 +88,8 @@ a clean stack rather than a tangle:
 
 This is the separation of concerns the README gestures at, made concrete: each
 layer owns exactly one decision, and the layers compose because they run in
-dependency order. Notably, there is **no description-pruning or response-compaction
-layer in the pipeline** — those token tricks were removed so the gateway can make
-one airtight claim: *the only thing it changes is how many tools the model sees,
-never their text.* They survive as optional add-ons (§3.3).
+dependency order. The pipeline's token savings come from returning fewer tools for
+the task, and it never rewrites tool text.
 
 ---
 
@@ -168,26 +166,6 @@ Two correctness properties matter:
 
 Route-by-meaning (§5) is the entire selection mechanism here — not an optional
 re-rank bolted onto a hardcoded list. The query *is* the interface.
-
-### 3.3 Where pruning and compaction went (and why)
-
-An earlier version of this gateway carried two more layers: a
-`DescriptionPrunerTransform` that trimmed each tool's description to a single capped
-line (*input* trimming), and a `ResponseCompactor` that shrank fat `tools/call`
-payloads (*output* trimming). Both worked and both saved tokens — but they were
-**deliberately removed from the gateway**, for one reason: they change *what the
-model reads*. With them in place, the headline A/B was no longer a clean experiment
-("we changed only the count") — a skeptic could fairly say the savings came from
-truncating text, not from retrieval. Measured, pruning was contributing barely ~1%
-of the headline delta (≈219 of ≈19,000 tokens saved on the PR task), so the honesty
-win dwarfed the token loss.
-
-They remain genuinely useful as **optional, additive layers** — they stack on top of
-retrieval without contradicting it — and they're documented as the "you can go
-further" chapter (README's *Further hardening*, and the production follow-up
-[`blog2.md`](./blog2.md)), alongside identity-derived scope, abstention, and
-re-ranking. They are simply not part of the core claim this gateway is built to
-demonstrate.
 
 ---
 

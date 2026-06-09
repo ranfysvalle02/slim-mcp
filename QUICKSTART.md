@@ -103,7 +103,5 @@ tools it returns, never their text.
 ## What next?
 
 - [`README.md`](./README.md) — full architecture, endpoints, and config.
-- [`blog.md`](./blog.md) — the motivation behind the lean-gateway design (and
-  Appendix F: the "you can go further" levers — scope, re-ranking, pruning,
-  compaction).
+- [`blog.md`](./blog.md) — the motivation behind the lean-gateway design.
 - [`architecture.md`](./architecture.md) — how the request pipeline is wired.

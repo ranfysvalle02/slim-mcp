@@ -212,13 +212,11 @@ Routing by meaning is the *floor* of this design, not the ceiling. It already tu
 
 Both are addressable. **Every lever below either makes the model more accurate or shrinks the handoff further — and most do both at once.** None reintroduce the brittle, hand-maintained policy we deleted; each is either *derived by the system* or *learned from data*. They stack cleanly on top of retrieval.
 
-### The high-impact three
+### High-impact levers
 
-**1. Trim what survives — and what comes back.** Shrink each surviving tool, not just the count. **Description pruning** collapses text to a single capped line (input-side). **Response compaction** is its output-side mirror: drop nulls, cap arrays, truncate oversized strings — always leaving a `truncated`/`next_cursor` escape hatch. We pulled both from the headline experiment so the token claim stayed clean, but they're the obvious first add-on. Compaction is the only lever that touches the *output* half of the bill.
+**1. Add a lexical arm, then re-rank.** Fuse a keyword `$search` with `$rankFusion` alongside the vector query — both over the same documents — so half-keyword, half-vibe queries don't slip through a purely semantic net. Then reorder the shortlist with a richer pass (cross-encoder or small LLM scoring by task-fit). Affordable because it runs over ~20 candidates, never nine hundred.
 
-**2. Add a lexical arm, then re-rank.** Fuse a keyword `$search` with `$rankFusion` alongside the vector query — both over the same documents — so half-keyword, half-vibe queries don't slip through a purely semantic net. Then reorder the shortlist with a richer pass (cross-encoder or small LLM scoring by task-fit). Affordable because it runs over ~20 candidates, never nine hundred.
-
-**3. Close the loop with the audit trail.** Every routing decision — query, tools returned, tool picked, call outcome — is already recorded in MongoDB. That's a labeled dataset, not just forensics. Queries that routed wrong become regression cases. Descriptions that mislead get rewritten. The catalog improves with use, no model retraining required.
+**2. Close the loop with the audit trail.** Every routing decision — query, tools returned, tool picked, call outcome — is already recorded in MongoDB. That's a labeled dataset, not just forensics. Queries that routed wrong become regression cases. Descriptions that mislead get rewritten. The catalog improves with use, no model retraining required.
 
 ### Additional levers (diminishing returns, increasing specificity)
 

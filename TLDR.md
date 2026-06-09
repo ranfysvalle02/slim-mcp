@@ -47,7 +47,7 @@ Embeddings are generated **locally** (Ollama `nomic-embed-text`, 768-dim — no 
 
 ## Also true (beyond the token bill)
 
-- **One idea, on purpose:** this demo makes a single airtight claim — *fewer tools, identical text* — so it does exactly one thing: semantic retrieval on the *input* side. Token bloat has a second face (fat tool *results* on every `tools/call`), and there are further input-side levers (description pruning) too. Those stack cleanly on top but would muddy the one clean claim, so they're kept *out of the headline* — see the blog's "The other half of the bill", Appendix E, and the **further hardening** levers in Appendix F.
+- **One idea, on purpose:** this demo makes a single airtight claim — *fewer tools, identical text*. It does one thing: semantic retrieval that returns only the tools the task needs, with each returned tool description left untouched.
 - **Accuracy:** fewer tools in context means fewer wrong-tool picks and hallucinated args. Cheaper *and* more correct.
 - **No hardcoded policy:** there's no routing table to maintain — you don't pre-declare anything, you describe the work in plain words and the embeddings do the rest.
 - **Security is *more* visible, not less:** every call is a document in an `invocation_audit` ledger, and the safety floor hides destructive tools in both directions — a caller can't invoke `delete_file` even if it knows the name.

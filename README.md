@@ -26,8 +26,7 @@ gateway layer, not in the MCP protocol.
 
 > Want the why behind it? Read [`blog.md`](./blog.md) —
 > *"How a Few Bad MCP Servers Pushed Us to Build a Gateway on MongoDB"* — and its
-> production follow-up [`blog2.md`](./blog2.md) on identity, resiliency, and the
-> levers beyond retrieval.
+> production follow-up [`blog2.md`](./blog2.md) on identity and resiliency.
 
 ## TL;DR
 
@@ -94,19 +93,9 @@ hot path via the `X-MCP-Query` header), and detailed under
 
 ### One idea, on purpose
 
-Token bloat has two faces — an *input* tax (the schema/description dump on every
-`tools/list`) and an *output* tax (fat tool *results* on `tools/call`). This demo
-deliberately tells **one** story: the input side, solved the cleanest possible
-way — **retrieval**. Hand the model only the tools the task needs, with their text
-left exactly as published.
-
-Two further levers stack on top to squeeze even more: **description pruning** (trim
-each tool's text) and **response compaction** (shrink oversized results). They're
-real and useful, but they change *what the model reads*, which would muddy the one
-clean claim this demo makes ("we changed only the count"). So they're kept **out of
-the headline** and live in the "you can go further" chapter — see
-[Further hardening](#further-hardening) below, and the production follow-up
-[`blog2.md`](./blog2.md).
+This demo makes one clean claim: the gateway returns **fewer** tools for the task,
+while keeping each returned tool's text exactly as the upstream published it.
+The only thing that changes is the count.
 
 ### Request header
 
@@ -348,27 +337,3 @@ scripts/seed_catalog.py # embed the catalog + build the Vector Search index
 - Optional: MongoDB (telemetry + the embedded catalog). Without it, semantic
   retrieval is disabled and the gateway serves the full catalog.
 
-## Further hardening
-
-Routing by meaning is the floor, not the ceiling. A few **additive** levers shrink
-the handoff further or narrow the chance of a wrong-tool pick — all of them stack
-*on top* of retrieval without changing the clean headline claim:
-
-- **Description pruning** — trim each retained tool's text to a single capped line.
-  A small extra input-side win on top of the count reduction.
-- **Response compaction** — the output-side mirror: shrink fat `tools/call` results
-  (drop nulls, cap arrays, truncate strings) before they hit the model's context.
-- **Identity-derived scope** — turn a verified identity/role into a metadata
-  pre-filter on the vector query (entitled *and* relevant in one `$vectorSearch`).
-- **Abstain on low confidence** — when retrieval scores are weak or tied, return
-  fewer tools or ask the agent to disambiguate instead of guessing.
-- **Re-rank the shortlist** — a cross-encoder or small LLM reorders the top-k by
-  true task-fit (cheap: it runs over ~20 candidates, never the firehose).
-- **Dynamic top-k** — size `k` to retrieval confidence (tight for sure things).
-- **Close the loop** — mine the `invocation_audit` trail for mis-routes and fix
-  the descriptions/embeddings that caused them; the catalog improves with use.
-
-Pruning and compaction once lived *in* this gateway; they were pulled out so the
-demo could make a single, airtight point — fewer tools, identical text. The long
-version — with the identity story and the MongoDB mechanics — is the production
-follow-up post, [`blog2.md`](./blog2.md).
